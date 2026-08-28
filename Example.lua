@@ -678,37 +678,11 @@ SecretDepbox:SetupDependencies({
 -- Sets the watermark visibility
 Library:SetWatermarkVisibility(true)
 
--- Example of dynamically-updating watermark with common traits (fps and ping)
-local FrameTimer = tick()
-local FrameCounter = 0;
-local FPS = 60;
-local GetPing = (function() return math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-local CanDoPing = pcall(function() return GetPing(); end)
-
-local WatermarkConnection = game:GetService("RunService").RenderStepped:Connect(function()
-	FrameCounter += 1;
-
-	if (tick() - FrameTimer) >= 1 then
-		FPS = FrameCounter;
-		FrameTimer = tick();
-		FrameCounter = 0;
-	end;
-
-	if CanDoPing then
-		Library:SetWatermark(("LinoriaLib demo | %d fps | %d ms"):format(
-			math.floor(FPS),
-			GetPing()
-		));
-	else
-		Library:SetWatermark(("LinoriaLib demo | %d fps"):format(
-			math.floor(FPS)
-		));
-	end
-end);
+-- Live watermark tokens: {fps}, {ping} and {time} are substituted and refreshed
+-- automatically by the library — no manual RenderStepped loop needed.
+Library:SetWatermark("LinoriaLib demo | {fps} fps | {ping} ms | {time}")
 
 Library:OnUnload(function()
-	WatermarkConnection:Disconnect()
-
 	print("Unloaded!")
 	Library.Unloaded = true
 end)

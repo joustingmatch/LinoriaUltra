@@ -6406,16 +6406,69 @@ do
     Library.WatermarkText = WatermarkLabel
     Library:MakeDraggable(Library.Watermark)
 
+    --// Live watermark tokens: {fps}, {ping}, {time} \\--
+    local Stats = cloneref(game:GetService("Stats"))
+
+    Library.WatermarkTemplate = ""
+    Library.WatermarkHasTokens = false
+
+    local WatermarkFPS = 60
+    local FrameCount, FrameTime = 0, 0
+
+    local function GetPing(): number
+        local Ok, Ping = pcall(function()
+            return Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+        end)
+        return Ok and math.floor(Ping + 0.5) or 0
+    end
+
+    -- Substitutes the live tokens into the template and re-fits the frame.
+    local function RenderWatermark()
+        local Text = Library.WatermarkTemplate or ""
+        Text = Text:gsub("{fps}", tostring(WatermarkFPS))
+        Text = Text:gsub("{ping}", tostring(GetPing()))
+        Text = Text:gsub("{time}", os.date("%H:%M:%S"))
+
+        local X, Y = Library:GetTextBounds(Text, Library.Font, 14)
+        Library.Watermark.Size = UDim2.new(0, X + 15, 0, (Y * 1.5) + 3)
+        Library.WatermarkText.Text = Text
+    end
+    Library.RenderWatermark = RenderWatermark
+
+    -- Tracks FPS and refreshes token watermarks ~2x/second while visible.
+    local Accumulator = 0
+    Library:GiveSignal(RunService.RenderStepped:Connect(function(Delta)
+        if Library.Unloaded then return end
+
+        FrameCount += 1
+        FrameTime += Delta
+        if FrameTime >= 0.5 then
+            WatermarkFPS = math.floor(FrameCount / FrameTime + 0.5)
+            FrameCount, FrameTime = 0, 0
+        end
+
+        if not (Library.WatermarkHasTokens and Library.Watermark.Visible) then return end
+        Accumulator += Delta
+        if Accumulator >= 0.5 then
+            Accumulator = 0
+            RenderWatermark()
+        end
+    end))
+
     function Library:SetWatermarkVisibility(Bool)
         Library.Watermark.Visible = Bool
     end
 
     function Library:SetWatermark(Text)
-        local X, Y = Library:GetTextBounds(Text, Library.Font, 14)
-        Library.Watermark.Size = UDim2.new(0, X + 15, 0, (Y * 1.5) + 3)
-        Library:SetWatermarkVisibility(true)
+        Library.WatermarkTemplate = Text
+        Library.WatermarkHasTokens = (
+            string.find(Text, "{fps}", 1, true)
+            or string.find(Text, "{ping}", 1, true)
+            or string.find(Text, "{time}", 1, true)
+        ) ~= nil
 
-        Library.WatermarkText.Text = Text
+        RenderWatermark()
+        Library:SetWatermarkVisibility(true)
     end
 end
 
@@ -6943,7 +6996,57 @@ function Library:CreateWindow(...)
             end)
         end
 
-        local function CreateResultRow(Entry)
+        -- Currently shown result rows (each { Row, Hover, Entry }) and the
+        -- keyboard-highlighted index into that list.
+        local CurrentRows = {}
+        local Selection = 0
+
+        local function CommitEntry(Entry)
+            if not Entry then return end
+            Window:GoToSearchResult(Entry)
+            SearchResults.Visible = false
+            if Window.SearchBox then Window.SearchBox.Text = "" end
+        end
+
+        -- Paints the selected row's highlight and scrolls it into view.
+        local function ApplySelectionVisual()
+            for Index, Handle in ipairs(CurrentRows) do
+                local Selected = Index == Selection
+                TweenService:Create(Handle.Hover, TweenInfo.new(0.12), {
+                    BackgroundTransparency = Selected and 0.8 or 1;
+                }):Play()
+            end
+
+            local Handle = CurrentRows[Selection]
+            if Handle then
+                -- Keep the highlighted row within the scrolling viewport.
+                local Top = (Selection - 1) * ROW_HEIGHT
+                local Bottom = Top + ROW_HEIGHT
+                local ViewTop = SearchList.CanvasPosition.Y
+                local ViewHeight = SearchList.AbsoluteSize.Y
+                local NewTop = ViewTop
+                if Top < ViewTop then
+                    NewTop = Top
+                elseif Bottom > ViewTop + ViewHeight then
+                    NewTop = Bottom - ViewHeight
+                end
+                if NewTop ~= ViewTop then
+                    SearchList.CanvasPosition = Vector2.new(0, math.max(0, NewTop))
+                end
+            end
+        end
+
+        local function SetSelection(Index)
+            if #CurrentRows == 0 then
+                Selection = 0
+                return
+            end
+            -- Wrap around top/bottom.
+            Selection = ((Index - 1) % #CurrentRows) + 1
+            ApplySelectionVisual()
+        end
+
+        local function CreateResultRow(Entry, RowIndex)
             local Row = Library:Create("TextButton", {
                 AutoButtonColor = false;
                 BackgroundColor3 = Library.MainColor;
@@ -6965,7 +7068,7 @@ function Library:CreateWindow(...)
             })
             Library:AddToRegistry(Hover, { BackgroundColor3 = "AccentColor"; })
 
-            local NameLabel = Library:CreateLabel({
+            Library:CreateLabel({
                 Position = UDim2.new(0, 10, 0, 4);
                 Size = UDim2.new(1, -16, 0, 15);
                 Text = Entry.Name;
@@ -6996,28 +7099,52 @@ function Library:CreateWindow(...)
             end
             PathLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 
+            -- Hovering the mouse moves the keyboard selection to that row.
             Row.MouseEnter:Connect(function()
-                TweenService:Create(Hover, TweenInfo.new(0.12), { BackgroundTransparency = 0.85 }):Play()
-            end)
-            Row.MouseLeave:Connect(function()
-                TweenService:Create(Hover, TweenInfo.new(0.12), { BackgroundTransparency = 1 }):Play()
+                SetSelection(RowIndex)
             end)
 
             -- InputBegan (not MouseButton1Click) so the click still registers even though
             -- pressing a result also defocuses the search box on the same press.
             Row.InputBegan:Connect(function(Input)
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                    Window:GoToSearchResult(Entry)
-                    SearchResults.Visible = false
-                    if Window.SearchBox then Window.SearchBox.Text = "" end
+                    CommitEntry(Entry)
                 end
             end)
+
+            return { Row = Row, Hover = Hover, Entry = Entry }
+        end
+
+        -- Non-interactive placeholder shown when nothing matches.
+        local function CreateNoResultsRow()
+            local Row = Library:Create("Frame", {
+                BackgroundTransparency = 1;
+                Size = UDim2.new(1, 0, 0, ROW_HEIGHT);
+                ZIndex = 6002;
+                Parent = SearchList;
+            })
+
+            local Label = Library:CreateLabel({
+                Position = UDim2.new(0, 10, 0, 0);
+                Size = UDim2.new(1, -16, 1, 0);
+                Text = "No results found";
+                TextSize = 14;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ZIndex = 6003;
+                Parent = Row;
+            })
+            if Library.RegistryMap[Label] then
+                Library.RegistryMap[Label].Properties.TextColor3 = nil
+            end
+            Label.TextColor3 = Color3.fromRGB(150, 150, 150)
         end
 
         local function RefreshResults()
             for _, Child in next, SearchList:GetChildren() do
-                if Child:IsA("TextButton") then Child:Destroy() end
+                if Child:IsA("TextButton") or Child:IsA("Frame") then Child:Destroy() end
             end
+            table.clear(CurrentRows)
+            Selection = 0
 
             local Query = string.lower(SearchBox.Text)
             if Query == "" then
@@ -7028,14 +7155,18 @@ function Library:CreateWindow(...)
             local Count = 0
             for _, Entry in next, Window.SearchIndex do
                 if Entry.Anchor and Entry.Anchor.Parent and string.find(Entry.Query, Query, 1, true) then
-                    CreateResultRow(Entry)
                     Count = Count + 1
+                    table.insert(CurrentRows, CreateResultRow(Entry, Count))
                     if Count >= 50 then break end
                 end
             end
 
             if Count == 0 then
-                SearchResults.Visible = false
+                -- Show a single "No results" row instead of hiding the popup.
+                CreateNoResultsRow()
+                SearchResults.Size = UDim2.new(0, 240, 0, ROW_HEIGHT + 6)
+                SearchList.CanvasSize = UDim2.new(0, 0, 0, ROW_HEIGHT + 6)
+                SearchResults.Visible = true
                 return
             end
 
@@ -7043,6 +7174,8 @@ function Library:CreateWindow(...)
             SearchResults.Size = UDim2.new(0, 240, 0, Shown * ROW_HEIGHT + 6)
             SearchList.CanvasSize = UDim2.new(0, 0, 0, Count * ROW_HEIGHT + 6)
             SearchResults.Visible = true
+
+            SetSelection(1)
         end
 
         SearchBox:GetPropertyChangedSignal("Text"):Connect(RefreshResults)
@@ -7051,7 +7184,26 @@ function Library:CreateWindow(...)
             if SearchBox.Text ~= "" then RefreshResults() end
         end)
 
-        SearchBox.FocusLost:Connect(function()
+        -- Keyboard navigation while the search box is focused: up/down to move the
+        -- highlight (wraps), Enter to jump, Escape to dismiss.
+        Library:GiveSignal(InputService.InputBegan:Connect(function(Input, _Processed)
+            if Library.Unloaded then return end
+            if not (SearchResults.Visible and SearchBox:IsFocused()) then return end
+
+            if Input.KeyCode == Enum.KeyCode.Down then
+                SetSelection(Selection + 1)
+            elseif Input.KeyCode == Enum.KeyCode.Up then
+                SetSelection(Selection - 1)
+            elseif Input.KeyCode == Enum.KeyCode.Escape then
+                SearchResults.Visible = false
+            end
+        end))
+
+        SearchBox.FocusLost:Connect(function(EnterPressed)
+            if EnterPressed and SearchResults.Visible and CurrentRows[Selection] then
+                CommitEntry(CurrentRows[Selection].Entry)
+                return
+            end
             -- Delay so a click on a result registers before the popup hides.
             task.delay(0.15, function()
                 if not SearchBox:IsFocused() then
@@ -7198,19 +7350,17 @@ function Library:CreateWindow(...)
 
     local FooterLogo = Library:Create("ImageLabel", {
         AnchorPoint = Vector2.new(0.5, 0);
-        BackgroundColor3 = Library.MainColor;
-        BorderColor3 = Library.OutlineColor;
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
         Position = UDim2.new(0.5, 0, 0, 6);
         Size = UDim2.fromOffset(26, 26);
         Image = "";
         ImageTransparency = 1;
-        BackgroundTransparency = 1;
         ScaleType = Enum.ScaleType.Fit;
         ZIndex = 4;
         Parent = Footer;
     })
     TrackSidebar(FooterLogo, "ImageTransparency", 0)
-    TrackSidebar(FooterLogo, "BackgroundTransparency", 0)
 
     local FooterTitle = Library:CreateLabel({
         AnchorPoint = Vector2.new(0.5, 0);
@@ -7308,12 +7458,18 @@ function Library:CreateWindow(...)
                 Position = UDim2.new(0, 8, 0, 8);
                 Size = UDim2.new(0, SidebarWidth, 1, -(8 + FooterHeight + 14));
             }
-            -- Collapsed: toggle lives in the header, so the content fills fully.
-            local Gutter = Collapsed and 0 or SidebarWidth
-            ContainerGoal = {
-                Position = UDim2.new(0, 8 + Gutter + 6, 0, 4);
-                Size = UDim2.new(1, -(16 + Gutter + 6), 1, -12);
-            }
+            if Collapsed then
+                -- Sidebar is gone entirely; content spans the full window.
+                ContainerGoal = {
+                    Position = UDim2.new(0, 8, 0, 4);
+                    Size = UDim2.new(1, -16, 1, -12);
+                }
+            else
+                ContainerGoal = {
+                    Position = UDim2.new(0, 8 + SidebarWidth + 6, 0, 4);
+                    Size = UDim2.new(1, -(16 + SidebarWidth + 6), 1, -12);
+                }
+            end
         else
             AreaGoal = {
                 Position = UDim2.new(0, 8 - WindowInfo.TabPadding, 0, 4);
