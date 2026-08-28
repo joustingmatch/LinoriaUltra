@@ -248,6 +248,9 @@ local Library = {
     Black = Color3.new(0, 0, 0);
     Font = Enum.Font.Code,
 
+    -- shared UI corner radius (used by any rounded element so they all match) --
+    CornerRadius = UDim.new(0, 4);
+
     -- frames --
     OpenedFrames = {};
     DependencyBoxes = {};
@@ -677,7 +680,8 @@ function Library:MakeResizable(Instance, MinSize)
     Instance.Active = true
     
     local ResizerImage_Size = 25 * DPIScale
-    local ResizerImage_HoverTransparency = 0.5
+    -- Hitbox stays invisible; the always-visible grip below is the actual indicator.
+    local ResizerImage_HoverTransparency = 1
 
     local Resizer = Library:Create("Frame", {
         SizeConstraint = Enum.SizeConstraint.RelativeXX;
@@ -708,6 +712,38 @@ function Library:MakeResizable(Instance, MinSize)
     })
 
     Library:AddToRegistry(ResizerImage, { BackgroundColor3 = "AccentColor"; })
+
+    -- Always-visible corner grip: three tapered diagonal lines in the bottom-right corner.
+    local ResizeGrip = Library:Create("Frame", {
+        AnchorPoint = Vector2.new(1, 1);
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        Position = UDim2.new(1, -4, 1, -4);
+        Size = UDim2.fromOffset(14, 14);
+        ZIndex = 6;
+        Parent = Instance;
+    })
+
+    for _, Line in { { 4, 3 }, { 8, 7 }, { 12, 11 } } do
+        local Length, Offset = Line[1], Line[2]
+        local GripLine = Library:Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5);
+            BackgroundColor3 = Library.AccentColor;
+            BorderSizePixel = 0;
+            Rotation = -45;
+            Position = UDim2.fromOffset(14 - Offset, 14 - Offset);
+            Size = UDim2.fromOffset(Length, 2);
+            ZIndex = 6;
+            Parent = ResizeGrip;
+        })
+
+        Library:Create("UICorner", {
+            CornerRadius = UDim.new(1, 0);
+            Parent = GripLine;
+        })
+
+        Library:AddToRegistry(GripLine, { BackgroundColor3 = "AccentColor"; })
+    end
 
     Resizer.Size = UDim2.fromOffset(ResizerImage_Size, ResizerImage_Size)
     Resizer.Position = UDim2.new(1, -ResizerImage_Size, 1, -ResizerImage_Size)
@@ -1133,7 +1169,14 @@ local Templates = { -- TO-DO: do it for missing elements.
         NotifySide = "Left",
         ShowCustomCursor = true,
         UnlockMouseWhileOpen = true,
-        Center = false
+        Center = false,
+        Searchbar = true,
+        SearchbarPlaceholder = "Search",
+        MenuLayout = "Top", -- "Top" or "Side"
+        SidebarWidth = 118,
+        Logo = "",
+        FooterTitle = "",
+        FooterSubtitle = "",
     },
 
     --// Elements \\--
@@ -2312,7 +2355,7 @@ do
                 )
 
                 Button.InputBegan:Connect(function(Input)
-                    if Input.UserInputType ~= Enum.UserInputType.MouseButton1 or Input.UserInputType ~= Enum.UserInputType.Touch then
+                    if Input.UserInputType ~= Enum.UserInputType.MouseButton1 and Input.UserInputType ~= Enum.UserInputType.Touch then
                         return
                     end
 
@@ -2463,7 +2506,8 @@ do
 
         SatVibMap.InputBegan:Connect(function(Input)
             if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+                if Library.IsMobile then Library.CanDrag = false end
+                while Input.UserInputState ~= Enum.UserInputState.End do
                     local MinX = SatVibMap.AbsolutePosition.X
                     local MaxX = MinX + SatVibMap.AbsoluteSize.X
                     local MouseX = math.clamp(Mouse.X, MinX, MaxX)
@@ -2481,13 +2525,15 @@ do
                     RunService.RenderStepped:Wait()
                 end
 
+                if Library.IsMobile then Library.CanDrag = true end
                 Library:AttemptSave()
             end
         end)
 
         HueSelectorInner.InputBegan:Connect(function(Input)
             if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+                if Library.IsMobile then Library.CanDrag = false end
+                while Input.UserInputState ~= Enum.UserInputState.End do
                     local MinY = HueSelectorInner.AbsolutePosition.Y
                     local MaxY = MinY + HueSelectorInner.AbsoluteSize.Y
                     local MouseY = math.clamp(Mouse.Y, MinY, MaxY)
@@ -2500,6 +2546,7 @@ do
                     RunService.RenderStepped:Wait()
                 end
 
+                if Library.IsMobile then Library.CanDrag = true end
                 Library:AttemptSave()
             end
         end)
@@ -2525,7 +2572,8 @@ do
         if TransparencyBoxInner then
             TransparencyBoxInner.InputBegan:Connect(function(Input)
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                    while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+                    if Library.IsMobile then Library.CanDrag = false end
+                    while Input.UserInputState ~= Enum.UserInputState.End do
                         local MinX = TransparencyBoxInner.AbsolutePosition.X
                         local MaxX = MinX + TransparencyBoxInner.AbsoluteSize.X
                         local MouseX = math.clamp(Mouse.X, MinX, MaxX)
@@ -2538,6 +2586,7 @@ do
                         RunService.RenderStepped:Wait()
                     end
 
+                    if Library.IsMobile then Library.CanDrag = true end
                     Library:AttemptSave()
                 end
             end)
@@ -4522,7 +4571,7 @@ do
                 local gPos = Fill.AbsoluteSize.X
                 local Diff = mPos - (Fill.AbsolutePosition.X + gPos)
 
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+                while Input.UserInputState ~= Enum.UserInputState.End do
                     local nMPos = Mouse.X
                     local nXOffset = math.clamp(gPos + (nMPos - mPos) + Diff, 0, Slider.MaxSize) -- what in tarnation are these variable names
                     local nXScale = Library:MapValue(nXOffset, 0, Slider.MaxSize, 0, 1)
@@ -6597,6 +6646,86 @@ function Library:CreateWindow(...)
         Parent = Inner;
     })
 
+    local SearchBox
+    if WindowInfo.Searchbar then
+        -- Rounded search field baked into the title bar (top-right).
+        local SearchOuter = Library:Create("Frame", {
+            AnchorPoint = Vector2.new(1, 0.5);
+            BackgroundColor3 = Library.BackgroundColor;
+            BorderSizePixel = 0;
+            Position = UDim2.new(1, -7, 0, 13);
+            Size = UDim2.new(0, 180, 0, 18);
+            ZIndex = 2;
+            Parent = Inner;
+        })
+
+        Library:Create("UICorner", {
+            -- Follows the library-wide corner radius so the search bar matches the rest of the UI.
+            CornerRadius = Library.CornerRadius;
+            Parent = SearchOuter;
+        })
+
+        local SearchStroke = Library:Create("UIStroke", {
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Color = Library.OutlineColor;
+            Thickness = 1;
+            Parent = SearchOuter;
+        })
+
+        Library:AddToRegistry(SearchOuter, {
+            BackgroundColor3 = "BackgroundColor";
+        })
+        Library:AddToRegistry(SearchStroke, {
+            Color = "OutlineColor";
+        })
+
+        local SearchIcon = Library:Create("ImageLabel", {
+            AnchorPoint = Vector2.new(0, 0.5);
+            BackgroundTransparency = 1;
+            Position = UDim2.new(0, 6, 0.5, 0);
+            Size = UDim2.fromOffset(12, 12);
+            ImageColor3 = Library.FontColor;
+            ImageTransparency = 0.2;
+            ZIndex = 3;
+            Parent = SearchOuter;
+        })
+
+        local SearchIconAsset = Library:GetCustomIcon("search")
+        if SearchIconAsset then
+            SearchIcon.Image = SearchIconAsset.Url
+            SearchIcon.ImageRectOffset = SearchIconAsset.ImageRectOffset
+            SearchIcon.ImageRectSize = SearchIconAsset.ImageRectSize
+        end
+
+        Library:AddToRegistry(SearchIcon, {
+            ImageColor3 = "FontColor";
+        }, true)
+
+        SearchBox = Library:Create("TextBox", {
+            BackgroundTransparency = 1;
+            Position = UDim2.new(0, 22, 0, 0);
+            Size = UDim2.new(1, -28, 1, 0);
+            Font = Library.Font;
+            PlaceholderColor3 = Color3.fromRGB(150, 150, 150);
+            PlaceholderText = WindowInfo.SearchbarPlaceholder;
+            Text = "";
+            TextColor3 = Library.FontColor;
+            TextSize = 14;
+            TextXAlignment = Enum.TextXAlignment.Left;
+            ClearTextOnFocus = false;
+            ClipsDescendants = true;
+            ZIndex = 3;
+            Parent = SearchOuter;
+        })
+
+        Library:ApplyTextStroke(SearchBox)
+        Library:AddToRegistry(SearchBox, {
+            TextColor3 = "FontColor";
+        })
+
+        Window.SearchBox = SearchBox
+    end
+
     local MainSectionOuter = Library:Create("Frame", {
         BackgroundColor3 = Library.BackgroundColor;
         BorderColor3 = Library.OutlineColor;
@@ -6705,11 +6834,187 @@ function Library:CreateWindow(...)
         BorderColor3 = "OutlineColor";
     })
 
+    --// Side-Bar layout \\--
+    -- These elements only show while the menu layout is "Side". They live on the
+    -- left of the window; the tab strip (TabArea) is re-shaped into a vertical
+    -- column between the header and the footer, and TabContainer is pushed right.
+    local SidebarWidth = math.clamp(WindowInfo.SidebarWidth or 118, 70, 260)
+    local FooterHeight = 66
+
+    -- List of { Object, Property, Shown } entries faded in/out with the layout.
+    local SidebarElements = {}
+    local function TrackSidebar(Object, Property, Shown)
+        table.insert(SidebarElements, { Object = Object, Property = Property, Shown = Shown })
+    end
+
+    local SidebarHeader = Library:CreateLabel({
+        Position = UDim2.new(0, 10, 0, 6);
+        Size = UDim2.new(0, SidebarWidth - 12, 0, 16);
+        Text = "Main";
+        TextSize = 14;
+        TextTransparency = 1;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        ZIndex = 3;
+        Visible = true;
+        Parent = MainSectionInner;
+    })
+    TrackSidebar(SidebarHeader, "TextTransparency", 0.35)
+
+    local SidebarDivider = Library:Create("Frame", {
+        BackgroundColor3 = Library.OutlineColor;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 8, 1, -(FooterHeight + 10));
+        Size = UDim2.new(0, SidebarWidth, 0, 1);
+        BackgroundTransparency = 1;
+        ZIndex = 3;
+        Parent = MainSectionInner;
+    })
+    Library:AddToRegistry(SidebarDivider, { BackgroundColor3 = "OutlineColor"; })
+    TrackSidebar(SidebarDivider, "BackgroundTransparency", 0)
+
+    local Footer = Library:Create("Frame", {
+        BackgroundColor3 = Library.BackgroundColor;
+        BorderColor3 = Color3.new(0, 0, 0);
+        BorderMode = Enum.BorderMode.Inset;
+        Position = UDim2.new(0, 8, 1, -(FooterHeight + 4));
+        Size = UDim2.new(0, SidebarWidth, 0, FooterHeight);
+        BackgroundTransparency = 1;
+        ZIndex = 3;
+        Parent = MainSectionInner;
+    })
+    Library:AddToRegistry(Footer, { BackgroundColor3 = "BackgroundColor"; })
+    TrackSidebar(Footer, "BackgroundTransparency", 0)
+
+    local FooterLogo = Library:Create("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0);
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3 = Library.OutlineColor;
+        Position = UDim2.new(0.5, 0, 0, 6);
+        Size = UDim2.fromOffset(26, 26);
+        Image = "";
+        ImageTransparency = 1;
+        BackgroundTransparency = 1;
+        ScaleType = Enum.ScaleType.Fit;
+        ZIndex = 4;
+        Parent = Footer;
+    })
+    TrackSidebar(FooterLogo, "ImageTransparency", 0)
+    TrackSidebar(FooterLogo, "BackgroundTransparency", 0)
+
+    local FooterTitle = Library:CreateLabel({
+        AnchorPoint = Vector2.new(0.5, 0);
+        Position = UDim2.new(0.5, 0, 0, 34);
+        Size = UDim2.new(1, -8, 0, 14);
+        Text = "";
+        TextSize = 14;
+        TextColor3 = Library.AccentColor;
+        TextTransparency = 1;
+        ZIndex = 4;
+        Parent = Footer;
+    })
+    -- Accent colour, kept in sync with the theme.
+    Library.RegistryMap[FooterTitle].Properties.TextColor3 = "AccentColor"
+    FooterTitle.TextColor3 = Library.AccentColor
+    TrackSidebar(FooterTitle, "TextTransparency", 0)
+
+    local FooterSubtitle = Library:CreateLabel({
+        AnchorPoint = Vector2.new(0.5, 0);
+        Position = UDim2.new(0.5, 0, 0, 48);
+        Size = UDim2.new(1, -8, 0, 12);
+        Text = "";
+        TextSize = 12;
+        TextTruncate = Enum.TextTruncate.AtEnd;
+        TextTransparency = 1;
+        ZIndex = 4;
+        Parent = Footer;
+    })
+    TrackSidebar(FooterSubtitle, "TextTransparency", 0.4)
+
+    -- Restyle callbacks registered by each tab (button geometry / selected look).
+    Window.TabRestyles = {}
+    Window.MenuLayout = (WindowInfo.MenuLayout == "Side") and "Side" or "Top"
+
+    function Window:SetFooter(Info)
+        Info = Info or {}
+        if typeof(Info.Title) == "string" then FooterTitle.Text = Info.Title end
+        if typeof(Info.Subtitle) == "string" then FooterSubtitle.Text = Info.Subtitle end
+        if Info.Logo ~= nil then
+            local Icon = Library:GetCustomIcon(tostring(Info.Logo))
+            if Icon then
+                FooterLogo.Image = Icon.Url
+                FooterLogo.ImageRectOffset = Icon.ImageRectOffset
+                FooterLogo.ImageRectSize = Icon.ImageRectSize
+            else
+                FooterLogo.Image = ""
+            end
+        end
+    end
+    Window:SetFooter({
+        Title = (WindowInfo.FooterTitle ~= "" and WindowInfo.FooterTitle) or Window.Title,
+        Subtitle = WindowInfo.FooterSubtitle,
+        Logo = (WindowInfo.Logo ~= "" and WindowInfo.Logo) or nil,
+    })
+
+    function Window:SetMenuLayout(Layout, Animate)
+        Layout = (Layout == "Side") and "Side" or "Top"
+        Window.MenuLayout = Layout
+
+        local IsSide = Layout == "Side"
+        local Info = TweenInfo.new(Animate and 0.28 or 0, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+
+        -- Layout properties can't be tweened; apply them up-front.
+        TabListLayout.FillDirection = IsSide and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+        TabListLayout.HorizontalAlignment = IsSide and Enum.HorizontalAlignment.Left or Enum.HorizontalAlignment.Center
+        TabListLayout.VerticalAlignment = IsSide and Enum.VerticalAlignment.Top or Enum.VerticalAlignment.Center
+        TabArea.ScrollingDirection = IsSide and Enum.ScrollingDirection.Y or Enum.ScrollingDirection.X
+
+        local AreaGoal, ContainerGoal
+        if IsSide then
+            AreaGoal = {
+                Position = UDim2.new(0, 8, 0, 26);
+                Size = UDim2.new(0, SidebarWidth, 1, -(26 + FooterHeight + 16));
+            }
+            ContainerGoal = {
+                Position = UDim2.new(0, 8 + SidebarWidth + 6, 0, 4);
+                Size = UDim2.new(1, -(16 + SidebarWidth + 6), 1, -12);
+            }
+        else
+            AreaGoal = {
+                Position = UDim2.new(0, 8 - WindowInfo.TabPadding, 0, 4);
+                Size = UDim2.new(1, -10, 0, 26);
+            }
+            ContainerGoal = {
+                Position = UDim2.new(0, 8, 0, 30);
+                Size = UDim2.new(1, -16, 1, -38);
+            }
+        end
+
+        TweenService:Create(TabArea, Info, AreaGoal):Play()
+        TweenService:Create(TabContainer, Info, ContainerGoal):Play()
+
+        for _, Entry in next, SidebarElements do
+            local Goal = IsSide and Entry.Shown or 1
+            TweenService:Create(Entry.Object, Info, { [Entry.Property] = Goal }):Play()
+        end
+
+        for _, Restyle in next, Window.TabRestyles do
+            Library:SafeCallback(Restyle, Layout, Animate)
+        end
+    end
+
     function Window:SetWindowTitle(Title)
         if typeof(Title) == "string" then
             Window.Title = Title
             WindowLabel.Text = Window.Title
         end
+    end
+
+    function Window:OnSearch(Callback)
+        assert(typeof(Callback) == "function", "OnSearch: `Callback` must be a function.")
+        if not Window.SearchBox then return end
+        return Window.SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+            Callback(Window.SearchBox.Text)
+        end)
     end
 
     function Window:SetBackgroundImage(NewImage)
@@ -7265,6 +7570,60 @@ function Library:CreateWindow(...)
             BackgroundColor3 = "MainColor";
         })
 
+        -- Accent bar shown on the left edge of the active tab while in Side layout.
+        local SelectionHighlight = Library:Create("Frame", {
+            BackgroundColor3 = Library.AccentColor;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 0, 0, 0);
+            Size = UDim2.new(0, 2, 1, 0);
+            Visible = false;
+            ZIndex = 4;
+            Parent = TabButton;
+        })
+        Library:AddToRegistry(SelectionHighlight, { BackgroundColor3 = "AccentColor"; })
+
+        Tab.ButtonWidth = TabButtonWidth
+        Tab.Active = false
+
+        -- Applies the active/inactive look, honouring the current menu layout.
+        local function UpdateSelectedVisual()
+            local Active = Tab.Active
+            local IsSide = Window.MenuLayout == "Side"
+
+            SelectionHighlight.Visible = IsSide and Active
+            Blocker.BackgroundTransparency = (not IsSide) and Active and 0 or 1
+
+            if Active then
+                TabButton.BackgroundColor3 = Library.MainColor
+                Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "MainColor"
+            else
+                TabButton.BackgroundColor3 = Library.BackgroundColor
+                Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "BackgroundColor"
+            end
+        end
+        Tab.UpdateSelectedVisual = UpdateSelectedVisual
+
+        -- Reshapes the tab button between the horizontal (Top) and vertical (Side) strips.
+        local function ApplyTabLayout(Layout, Animate)
+            local IsSide = Layout == "Side"
+            local Info = TweenInfo.new(Animate and 0.28 or 0, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+
+            if IsSide then
+                TweenService:Create(TabButton, Info, { Size = UDim2.new(1, 0, 0, 26) }):Play()
+                TabButtonLabel.TextXAlignment = Enum.TextXAlignment.Left
+                TabButtonLabel.Position = UDim2.new(0, 10, 0, 0)
+                TabButtonLabel.Size = UDim2.new(1, -12, 1, -1)
+            else
+                TweenService:Create(TabButton, Info, { Size = UDim2.new(0, Tab.ButtonWidth + 8 + 4, 0.85, 0) }):Play()
+                TabButtonLabel.TextXAlignment = Enum.TextXAlignment.Center
+                TabButtonLabel.Position = UDim2.new(0, 0, 0, 0)
+                TabButtonLabel.Size = UDim2.new(1, 0, 1, -1)
+            end
+
+            UpdateSelectedVisual()
+        end
+        table.insert(Window.TabRestyles, ApplyTabLayout)
+
         local TabFrame = Library:Create("Frame", {
             Name = "TabFrame",
             BackgroundTransparency = 1;
@@ -7523,9 +7882,8 @@ end
                 Tab:HideTab()
             end
 
-            Blocker.BackgroundTransparency = 0
-            TabButton.BackgroundColor3 = Library.MainColor
-            Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "MainColor"
+            Tab.Active = true
+            UpdateSelectedVisual()
             TabFrame.Visible = true
 
             Tab:Resize()
@@ -7533,9 +7891,8 @@ end
         Tab.Show = Tab.ShowTab
 
         function Tab:HideTab()
-            Blocker.BackgroundTransparency = 1
-            TabButton.BackgroundColor3 = Library.BackgroundColor
-            Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "BackgroundColor"
+            Tab.Active = false
+            UpdateSelectedVisual()
             TabFrame.Visible = false
         end
         Tab.Hide = Tab.HideTab
@@ -7555,7 +7912,10 @@ end
 
                 local TabButtonWidth = Library:GetTextBounds(Tab.Name, Library.Font, 16)
 
-                TabButton.Size = UDim2.new(0, TabButtonWidth + 8 + 4, 0.85, 0)
+                Tab.ButtonWidth = TabButtonWidth
+                if Window.MenuLayout ~= "Side" then
+                    TabButton.Size = UDim2.new(0, TabButtonWidth + 8 + 4, 0.85, 0)
+                end
                 TabButtonLabel.Text = Tab.Name
             end
         end
@@ -7879,6 +8239,9 @@ end
             Tab:Resize()
         end)
 
+        -- Shape this tab's button for the window's current menu layout.
+        ApplyTabLayout(Window.MenuLayout, false)
+
         -- This was the first tab added, so we show it by default.
         Library.TotalTabs = Library.TotalTabs + 1
         if Library.TotalTabs == 1 then
@@ -8030,8 +8393,8 @@ end
     if Library.IsMobile then
         local ToggleUIOuter = Library:Create("Frame", {
             BorderColor3 = Color3.new(0, 0, 0);
-            Position = UDim2.new(0.008, 0, 0.018, 0);
-            Size = UDim2.new(0, 77, 0, 30);
+            Position = UDim2.new(0, 8, 0, 8);
+            Size = UDim2.new(0, 92, 0, 36);
             ZIndex = 200;
             Visible = true;
             Parent = ScreenGui;
@@ -8100,8 +8463,8 @@ end
         -- Lock
         local LockUIOuter = Library:Create("Frame", {
             BorderColor3 = Color3.new(0, 0, 0);
-            Position = UDim2.new(0.008, 0, 0.075, 0);
-            Size = UDim2.new(0, 77, 0, 30);
+            Position = UDim2.new(0, 8, 0, 52);
+            Size = UDim2.new(0, 92, 0, 36);
             ZIndex = 200;
             Visible = true;
             Parent = ScreenGui;
@@ -8168,6 +8531,29 @@ end
             LockUIButton.Text = Library.CantDragForced and "Unlock UI" or "Lock UI"
         end)
     end
+
+    -- Adds a baked-in "Interface" groupbox (Menu layout selector) to a tab.
+    -- Mirrors the ThemeManager/SaveManager pattern so it can be dropped into an
+    -- existing UI Settings tab: Window:AddInterfaceGroupbox(tab).
+    function Window:AddInterfaceGroupbox(Tab, Side)
+        assert(Tab and Tab.AddGroupbox, "AddInterfaceGroupbox: `Tab` must be a valid tab.")
+
+        local Groupbox = (Side == "Right" or Side == 2) and Tab:AddRightGroupbox("Interface") or Tab:AddLeftGroupbox("Interface")
+
+        Groupbox:AddDropdown("MenuLayout", {
+            Text = "Menu layout",
+            Values = { "Top", "Side" },
+            Default = Window.MenuLayout,
+            Callback = function(Value)
+                Window:SetMenuLayout(Value, true)
+            end,
+        })
+
+        return Groupbox
+    end
+
+    -- Normalise geometry for the starting layout (no animation on first paint).
+    Window:SetMenuLayout(Window.MenuLayout, false)
 
     Window:SetBackgroundImage(WindowInfo.BackgroundImage or "")
     if WindowInfo.AutoShow then task.spawn(Library.Toggle) end

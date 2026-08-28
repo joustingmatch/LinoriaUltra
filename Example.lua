@@ -757,6 +757,17 @@ SaveManager:BuildConfigSection(Tabs["UI Settings"])
 -- NOTE: you can also call ThemeManager:ApplyToGroupbox to add it to a specific groupbox
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 
+-- Baked-in Interface groupbox: adds a "Menu layout" dropdown (Top / Side) with an
+-- animated swap between the classic top tab strip and the vertical side-bar.
+Window:AddInterfaceGroupbox(Tabs["UI Settings"])
+
+-- Optional: customise the side-bar footer (logo + title + subtitle).
+Window:SetFooter({
+	Title = "Zeke Hub",
+	Subtitle = "[UP] Just a Skid",
+	Logo = "rbxassetid://0", -- replace with your own asset id / url / lucide icon name
+})
+
 -- You can use the SaveManager:LoadAutoloadConfig() to load a config
 -- which has been marked to be one that auto loads!
 SaveManager:LoadAutoloadConfig()
