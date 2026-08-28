@@ -3322,6 +3322,8 @@ do
         Dropdown.Default = Defaults
         Dropdown.DefaultValues = Dropdown.Values
 
+        Library:AddSearchEntry(ParentObj.Groupbox, Dropdown.Text, "Dropdown", ParentObj.SearchAnchor or DropdownOuter)
+
         Options[Idx] = Dropdown
 
         return self
@@ -6708,35 +6710,21 @@ function Library:CreateWindow(...)
 
     local SearchBox
     if WindowInfo.Searchbar then
-        -- Rounded search field baked into the title bar (top-right).
+        -- Squared search field baked into the title bar (top-right).
         local SearchOuter = Library:Create("Frame", {
             AnchorPoint = Vector2.new(1, 0.5);
             BackgroundColor3 = Library.BackgroundColor;
-            BorderSizePixel = 0;
+            BorderColor3 = Library.OutlineColor;
+            BorderMode = Enum.BorderMode.Inset;
             Position = UDim2.new(1, -7, 0, 13);
             Size = UDim2.new(0, 180, 0, 18);
             ZIndex = 2;
             Parent = Inner;
         })
 
-        Library:Create("UICorner", {
-            -- Follows the library-wide corner radius so the search bar matches the rest of the UI.
-            CornerRadius = Library.CornerRadius;
-            Parent = SearchOuter;
-        })
-
-        local SearchStroke = Library:Create("UIStroke", {
-            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
-            Color = Library.OutlineColor;
-            Thickness = 1;
-            Parent = SearchOuter;
-        })
-
         Library:AddToRegistry(SearchOuter, {
             BackgroundColor3 = "BackgroundColor";
-        })
-        Library:AddToRegistry(SearchStroke, {
-            Color = "OutlineColor";
+            BorderColor3 = "OutlineColor";
         })
 
         local SearchIcon = Library:Create("ImageLabel", {
