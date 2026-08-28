@@ -6855,7 +6855,7 @@ function Library:CreateWindow(...)
         TextTransparency = 1;
         TextXAlignment = Enum.TextXAlignment.Left;
         ZIndex = 3;
-        Visible = true;
+        Visible = false;
         Parent = MainSectionInner;
     })
     TrackSidebar(SidebarHeader, "TextTransparency", 0.35)
@@ -6867,6 +6867,7 @@ function Library:CreateWindow(...)
         Size = UDim2.new(0, SidebarWidth, 0, 1);
         BackgroundTransparency = 1;
         ZIndex = 3;
+        Visible = false;
         Parent = MainSectionInner;
     })
     Library:AddToRegistry(SidebarDivider, { BackgroundColor3 = "OutlineColor"; })
@@ -6880,6 +6881,7 @@ function Library:CreateWindow(...)
         Size = UDim2.new(0, SidebarWidth, 0, FooterHeight);
         BackgroundTransparency = 1;
         ZIndex = 3;
+        Visible = false;
         Parent = MainSectionInner;
     })
     Library:AddToRegistry(Footer, { BackgroundColor3 = "BackgroundColor"; })
@@ -6964,7 +6966,8 @@ function Library:CreateWindow(...)
 
         -- Layout properties can't be tweened; apply them up-front.
         TabListLayout.FillDirection = IsSide and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
-        TabListLayout.HorizontalAlignment = IsSide and Enum.HorizontalAlignment.Left or Enum.HorizontalAlignment.Center
+        -- Left-aligned in both modes (matches the original top tab strip).
+        TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
         TabListLayout.VerticalAlignment = IsSide and Enum.VerticalAlignment.Top or Enum.VerticalAlignment.Center
         TabArea.ScrollingDirection = IsSide and Enum.ScrollingDirection.Y or Enum.ScrollingDirection.X
 
@@ -6992,9 +6995,31 @@ function Library:CreateWindow(...)
         TweenService:Create(TabArea, Info, AreaGoal):Play()
         TweenService:Create(TabContainer, Info, ContainerGoal):Play()
 
+        -- Fully hide the side-bar-only elements in Top mode. Fading transparency
+        -- alone leaves label text strokes visible, so toggle Visible as well:
+        -- show immediately when switching to Side, hide after the fade for Top.
+        Window.LayoutToken = (Window.LayoutToken or 0) + 1
+        local Token = Window.LayoutToken
+
+        if IsSide then
+            SidebarHeader.Visible = true
+            SidebarDivider.Visible = true
+            Footer.Visible = true
+        end
+
         for _, Entry in next, SidebarElements do
             local Goal = IsSide and Entry.Shown or 1
             TweenService:Create(Entry.Object, Info, { [Entry.Property] = Goal }):Play()
+        end
+
+        if not IsSide then
+            task.delay(Animate and 0.28 or 0, function()
+                if Window.LayoutToken == Token and Window.MenuLayout ~= "Side" then
+                    SidebarHeader.Visible = false
+                    SidebarDivider.Visible = false
+                    Footer.Visible = false
+                end
+            end)
         end
 
         for _, Restyle in next, Window.TabRestyles do
