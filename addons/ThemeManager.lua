@@ -62,6 +62,11 @@ local ThemeManager = {} do
 		['Tokyo Night']   = { 6, { FontColor = "ffffff", MainColor = "191925", AccentColor = "6759b3", BackgroundColor = "16161f", OutlineColor = "323232" } },
 		['Ubuntu']        = { 7, { FontColor = "ffffff", MainColor = "3e3e3e", AccentColor = "e2581e", BackgroundColor = "323232", OutlineColor = "191919" } },
 		['Quartz']        = { 8, { FontColor = "ffffff", MainColor = "232330", AccentColor = "426e87", BackgroundColor = "1d1b26", OutlineColor = "27232f" } },
+		['Nord']          = { 9, { FontColor = "eceff4", MainColor = "3b4252", AccentColor = "88c0d0", BackgroundColor = "2e3440", OutlineColor = "434c5e" } },
+		['Dracula']       = { 10, { FontColor = "f8f8f2", MainColor = "282a36", AccentColor = "bd93f9", BackgroundColor = "21222c", OutlineColor = "44475a" } },
+		['Evil Hello Kitty'] = { 11, { FontColor = "ffffff", MainColor = "1c1c1c", AccentColor = "f29ac4", BackgroundColor = "191919", OutlineColor = "1c1c1c" } },
+		['Catppuccin']    = { 12, { FontColor = "cdd6f4", MainColor = "1e1e2e", AccentColor = "cba6f7", BackgroundColor = "181825", OutlineColor = "313244" } },
+		['Rosé Pine']     = { 13, { FontColor = "e0def4", MainColor = "1f1d2e", AccentColor = "ebbcba", BackgroundColor = "191724", OutlineColor = "26233a" } },
 	}
 
 	function ApplyBackgroundVideo(videoLink)

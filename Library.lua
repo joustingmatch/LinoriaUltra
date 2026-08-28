@@ -438,6 +438,39 @@ function Library:SetIconModule(module: IconModule)
     Icons = module
 end
 
+-- Strips RichText tags so search names match/display as plain text.
+local function StripRichText(Text: string): string
+    return (tostring(Text):gsub("<[^>]->", ""))
+end
+
+-- Registers a searchable element so the window search bar can find and jump to it.
+-- `Groupbox` may be a real Groupbox or a Tabbox tab (both expose .Tab/.Side/.Name).
+function Library:AddSearchEntry(Groupbox, Name, Type, Anchor)
+    if not Groupbox or not Anchor then return end
+
+    local Clean = StripRichText(Name)
+    if Clean == "" then return end
+
+    local Tab = Groupbox.Tab
+    local Window = Tab and Tab.Window
+    if not Window or not Window.SearchIndex then return end
+
+    local Sides = Tab:GetSides()
+    local Side = (Groupbox.Side == 1) and Sides.Left or Sides.Right
+
+    table.insert(Window.SearchIndex, {
+        Name = Clean;
+        Query = string.lower(Clean);
+        Type = Type or "Element";
+        TabName = Tab.Name or "";
+        GroupName = Groupbox.Name or "";
+        Tab = Tab;
+        Side = Side;
+        Anchor = Anchor;
+        SubShow = Groupbox.TabboxShow; -- present only for Tabbox tabs
+    })
+end
+
 function Library:GetBetterColor(Color: Color3, Add: number): Color3
     Add = Add * 2
     return Color3.fromRGB(
@@ -1966,6 +1999,8 @@ do
         KeyPicker.Default = KeyPicker.Value
         KeyPicker.DefaultModifiers = table.clone(KeyPicker.Modifiers or {})
 
+        Library:AddSearchEntry(ParentObj.Groupbox, Info.Text or ParentObj.Text or "Keybind", "Keybind", ParentObj.SearchAnchor or KeyPicker.DisplayFrame)
+
         Options[Idx] = KeyPicker
 
         return self
@@ -2622,6 +2657,8 @@ do
         ColorPicker.DisplayFrame = DisplayFrame
 
         ColorPicker.Default = ColorPicker.Value
+
+        Library:AddSearchEntry(ParentObj.Groupbox, ColorPicker.Title, "Color Picker", ParentObj.SearchAnchor or DisplayFrame)
 
         Options[Idx] = ColorPicker
 
@@ -3492,6 +3529,8 @@ do
 
         Label.TextLabel = TextLabel
         Label.Container = Container
+        Label.Groupbox = Groupbox
+        Label.SearchAnchor = TextLabel
 
         function Label:SetText(Text)
             TextLabel.Text = Text
@@ -3513,7 +3552,8 @@ do
         Groupbox:Resize()
 
         table.insert(Groupbox.Elements, Label)
-        
+        Library:AddSearchEntry(Groupbox, Data.Text, "Label", TextLabel)
+
         if Data.Idx then
             -- Options[Data.Idx] = Label;
             Labels[Data.Idx] = Label
@@ -3779,7 +3819,11 @@ do
         Blank = Groupbox:AddBlank(5, IsVisible)
         Groupbox:Resize()
 
+        Button.Groupbox = Groupbox
+        Button.SearchAnchor = Button.Outer
+
         table.insert(Groupbox.Elements, Button)
+        Library:AddSearchEntry(Groupbox, Button.Text, "Button", Button.Outer)
         table.insert(Buttons, Button)
 
         return Button
@@ -4026,7 +4070,11 @@ do
 
         Textbox.Default = Textbox.Value
 
+        Textbox.Groupbox = Groupbox
+        Textbox.SearchAnchor = TextBoxOuter
+
         table.insert(Groupbox.Elements, Textbox)
+        Library:AddSearchEntry(Groupbox, Info.Text, "Input", TextBoxOuter)
         Options[Idx] = Textbox
 
         return Textbox
@@ -4252,11 +4300,14 @@ do
 
         Toggle.TextLabel = ToggleLabel
         Toggle.Container = Container
+        Toggle.Groupbox = Groupbox
+        Toggle.SearchAnchor = ToggleContainer
         setmetatable(Toggle, BaseAddons)
 
         Toggle.Default = Toggle.Value
 
         table.insert(Groupbox.Elements, Toggle)
+        Library:AddSearchEntry(Groupbox, Toggle.Text, "Toggle", ToggleContainer)
         Toggles[Idx] = Toggle
 
         Library:UpdateDependencyBoxes()
@@ -4315,7 +4366,7 @@ do
         local SliderOuter = Library:Create("Frame", {
             BackgroundColor3 = Color3.new(0, 0, 0);
             BorderColor3 = Color3.new(0, 0, 0);
-            Size = UDim2.new(1, -4, 0, 13);
+            Size = UDim2.new(1, -4, 0, 16);
             Visible = Slider.Visible;
             ZIndex = 5;
             Parent = Container;
@@ -4613,7 +4664,11 @@ do
 
         Slider.Default = Slider.Value
 
+        Slider.Groupbox = Groupbox
+        Slider.SearchAnchor = SliderOuter
+
         table.insert(Groupbox.Elements, Slider)
+        Library:AddSearchEntry(Groupbox, Slider.Text, "Slider", SliderOuter)
         Options[Idx] = Slider
 
         return Slider
@@ -5283,7 +5338,11 @@ do
         Dropdown.Default = Defaults
         Dropdown.DefaultValues = Dropdown.Values
 
+        Dropdown.Groupbox = Groupbox
+        Dropdown.SearchAnchor = DropdownOuter
+
         table.insert(Groupbox.Elements, Dropdown)
+        Library:AddSearchEntry(Groupbox, Dropdown.Text, "Dropdown", DropdownOuter)
         Options[Idx] = Dropdown
 
         return Dropdown
@@ -6602,8 +6661,9 @@ function Library:CreateWindow(...)
 
     local Window = {
         Tabs = {};
+        SearchIndex = {};
 
-        OriginalTitle = WindowInfo.Title; 
+        OriginalTitle = WindowInfo.Title;
         Title = WindowInfo.Title;
     }
 
@@ -6724,6 +6784,230 @@ function Library:CreateWindow(...)
         })
 
         Window.SearchBox = SearchBox
+
+        --// Auto-results popup \\--
+        local ROW_HEIGHT = 34
+        local MAX_ROWS = 6
+
+        local SearchResults = Library:Create("Frame", {
+            AnchorPoint = Vector2.new(1, 0);
+            BackgroundColor3 = Library.MainColor;
+            BorderSizePixel = 0;
+            Position = UDim2.new(1, -7, 0, 24);
+            Size = UDim2.new(0, 240, 0, 0);
+            Visible = false;
+            ZIndex = 6000;
+            Parent = Inner;
+        })
+
+        Library:Create("UICorner", {
+            CornerRadius = Library.CornerRadius;
+            Parent = SearchResults;
+        })
+
+        local SearchResultsStroke = Library:Create("UIStroke", {
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+            Color = Library.OutlineColor;
+            Thickness = 1;
+            Parent = SearchResults;
+        })
+
+        Library:AddToRegistry(SearchResults, { BackgroundColor3 = "MainColor"; })
+        Library:AddToRegistry(SearchResultsStroke, { Color = "OutlineColor"; })
+
+        local SearchList = Library:Create("ScrollingFrame", {
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 0, 0, 0);
+            Size = UDim2.new(1, 0, 1, 0);
+            CanvasSize = UDim2.new(0, 0, 0, 0);
+            ScrollBarThickness = 3;
+            ScrollBarImageColor3 = Library.AccentColor;
+            ZIndex = 6001;
+            Parent = SearchResults;
+        })
+
+        Library:AddToRegistry(SearchList, { ScrollBarImageColor3 = "AccentColor"; })
+
+        Library:Create("UIListLayout", {
+            SortOrder = Enum.SortOrder.LayoutOrder;
+            Parent = SearchList;
+        })
+
+        Library:Create("UIPadding", {
+            PaddingTop = UDim.new(0, 3);
+            PaddingBottom = UDim.new(0, 3);
+            Parent = SearchList;
+        })
+
+        -- Tweens the given side scroll frame so `Frame` is brought into view.
+        local function ScrollTo(ScrollFrame, Frame)
+            if not ScrollFrame or not Frame or not Frame.Parent then return end
+            local RelativeY = (Frame.AbsolutePosition.Y - ScrollFrame.AbsolutePosition.Y) + ScrollFrame.CanvasPosition.Y
+            local Target = math.max(0, RelativeY - 20)
+            TweenService:Create(ScrollFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                CanvasPosition = Vector2.new(0, Target);
+            }):Play()
+        end
+
+        -- Flashes an accent overlay over the target element a few times.
+        local function BlinkFrame(Frame)
+            if not Frame or not Frame.Parent then return end
+
+            local Blink = Library:Create("Frame", {
+                BackgroundColor3 = Library.AccentColor;
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, -2, 0, -2);
+                Size = UDim2.new(1, 4, 1, 4);
+                ZIndex = 9000;
+                Parent = Frame;
+            })
+
+            Library:Create("UICorner", {
+                CornerRadius = Library.CornerRadius;
+                Parent = Blink;
+            })
+
+            Library:AddToRegistry(Blink, { BackgroundColor3 = "AccentColor"; })
+
+            task.spawn(function()
+                for _ = 1, 3 do
+                    if not Blink.Parent then break end
+                    TweenService:Create(Blink, TweenInfo.new(0.16), { BackgroundTransparency = 0.55 }):Play()
+                    task.wait(0.19)
+                    TweenService:Create(Blink, TweenInfo.new(0.16), { BackgroundTransparency = 1 }):Play()
+                    task.wait(0.19)
+                end
+                Blink:Destroy()
+            end)
+        end
+
+        -- Jumps to a search entry: switches tab, scrolls, then blinks the element.
+        function Window:GoToSearchResult(Entry)
+            if not Entry then return end
+            if Entry.Tab and Entry.Tab.ShowTab then Entry.Tab:ShowTab() end
+            if Entry.SubShow then pcall(Entry.SubShow) end
+
+            task.defer(function()
+                task.wait()
+                ScrollTo(Entry.Side, Entry.Anchor)
+                task.wait(0.05)
+                BlinkFrame(Entry.Anchor)
+            end)
+        end
+
+        local function CreateResultRow(Entry)
+            local Row = Library:Create("TextButton", {
+                AutoButtonColor = false;
+                BackgroundColor3 = Library.MainColor;
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                Text = "";
+                Size = UDim2.new(1, 0, 0, ROW_HEIGHT);
+                ZIndex = 6002;
+                Parent = SearchList;
+            })
+
+            local Hover = Library:Create("Frame", {
+                BackgroundColor3 = Library.AccentColor;
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                Size = UDim2.new(1, 0, 1, 0);
+                ZIndex = 6002;
+                Parent = Row;
+            })
+            Library:AddToRegistry(Hover, { BackgroundColor3 = "AccentColor"; })
+
+            local NameLabel = Library:CreateLabel({
+                Position = UDim2.new(0, 10, 0, 4);
+                Size = UDim2.new(1, -16, 0, 15);
+                Text = Entry.Name;
+                TextSize = 14;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ZIndex = 6003;
+                Parent = Row;
+            })
+
+            local PathText = Entry.TabName
+            if Entry.GroupName ~= "" then
+                PathText = PathText .. "  ›  " .. Entry.GroupName
+            end
+
+            local PathLabel = Library:CreateLabel({
+                Position = UDim2.new(0, 10, 0, 18);
+                Size = UDim2.new(1, -16, 0, 12);
+                Text = PathText;
+                TextSize = 13;
+                TextXAlignment = Enum.TextXAlignment.Left;
+                ZIndex = 6003;
+                Parent = Row;
+            })
+
+            -- Dim, static colour for the breadcrumb line.
+            if Library.RegistryMap[PathLabel] then
+                Library.RegistryMap[PathLabel].Properties.TextColor3 = nil
+            end
+            PathLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+
+            Row.MouseEnter:Connect(function()
+                TweenService:Create(Hover, TweenInfo.new(0.12), { BackgroundTransparency = 0.85 }):Play()
+            end)
+            Row.MouseLeave:Connect(function()
+                TweenService:Create(Hover, TweenInfo.new(0.12), { BackgroundTransparency = 1 }):Play()
+            end)
+
+            Row.MouseButton1Click:Connect(function()
+                Window:GoToSearchResult(Entry)
+                SearchResults.Visible = false
+            end)
+        end
+
+        local function RefreshResults()
+            for _, Child in next, SearchList:GetChildren() do
+                if Child:IsA("TextButton") then Child:Destroy() end
+            end
+
+            local Query = string.lower(SearchBox.Text)
+            if Query == "" then
+                SearchResults.Visible = false
+                return
+            end
+
+            local Count = 0
+            for _, Entry in next, Window.SearchIndex do
+                if Entry.Anchor and Entry.Anchor.Parent and string.find(Entry.Query, Query, 1, true) then
+                    CreateResultRow(Entry)
+                    Count = Count + 1
+                    if Count >= 50 then break end
+                end
+            end
+
+            if Count == 0 then
+                SearchResults.Visible = false
+                return
+            end
+
+            local Shown = math.min(Count, MAX_ROWS)
+            SearchResults.Size = UDim2.new(0, 240, 0, Shown * ROW_HEIGHT + 6)
+            SearchList.CanvasSize = UDim2.new(0, 0, 0, Count * ROW_HEIGHT + 6)
+            SearchResults.Visible = true
+        end
+
+        SearchBox:GetPropertyChangedSignal("Text"):Connect(RefreshResults)
+
+        SearchBox.Focused:Connect(function()
+            if SearchBox.Text ~= "" then RefreshResults() end
+        end)
+
+        SearchBox.FocusLost:Connect(function()
+            -- Delay so a click on a result registers before the popup hides.
+            task.delay(0.15, function()
+                if not SearchBox:IsFocused() then
+                    SearchResults.Visible = false
+                end
+            end)
+        end)
     end
 
     local MainSectionOuter = Library:Create("Frame", {
@@ -7553,9 +7837,10 @@ function Library:CreateWindow(...)
                 Title = "WARNING",
                 Text = ""
             };
-            OriginalName = Name; 
+            OriginalName = Name;
             Name = Name;
             TableType = "Tab";
+            Window = Window;
         }
 
         local TabButtonWidth = Library:GetTextBounds(Tab.Name, Library.Font, 16)
@@ -7950,6 +8235,7 @@ end
                 Elements = {};
                 Side = Info.Side;
                 Tab = Tab;
+                Name = Info.Name;
                 TableType = "Groupbox";
             }
 
@@ -8050,6 +8336,8 @@ end
         end
 
         function Tab:AddTabbox(Info)
+            local ParentTab = Tab
+            local TabboxSide = Info.Side
             local Tabbox = {
                 Tabs = {};
             }
@@ -8114,6 +8402,9 @@ end
                     Elements = {};
                     Container = nil;
                     TableType = "TabboxTab";
+                    Tab = ParentTab;
+                    Side = TabboxSide;
+                    Name = Name;
                 }
 
                 local Button = Library:Create("Frame", {
@@ -8226,6 +8517,7 @@ end
                 end)
 
                 Tab.Container = Container
+                Tab.TabboxShow = Tab.Show
                 Tabbox.Tabs[Name] = Tab
 
                 setmetatable(Tab, BaseGroupbox)
