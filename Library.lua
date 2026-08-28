@@ -7003,9 +7003,14 @@ function Library:CreateWindow(...)
                 TweenService:Create(Hover, TweenInfo.new(0.12), { BackgroundTransparency = 1 }):Play()
             end)
 
-            Row.MouseButton1Click:Connect(function()
-                Window:GoToSearchResult(Entry)
-                SearchResults.Visible = false
+            -- InputBegan (not MouseButton1Click) so the click still registers even though
+            -- pressing a result also defocuses the search box on the same press.
+            Row.InputBegan:Connect(function(Input)
+                if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                    Window:GoToSearchResult(Entry)
+                    SearchResults.Visible = false
+                    if Window.SearchBox then Window.SearchBox.Text = "" end
+                end
             end)
         end
 
@@ -7236,31 +7241,26 @@ function Library:CreateWindow(...)
     })
     TrackSidebar(FooterSubtitle, "TextTransparency", 0.4)
 
-    -- Collapse toggle: a small chevron button at the top of the side-bar that
-    -- hides the tab column / footer and widens the content pane.
+    -- Collapse toggle: an icon-only chevron in the window header, to the left of
+    -- the title. Hides the tab column / footer and widens the content pane.
     local ToggleWidth = 22
     local CollapseToggle = Library:Create("ImageButton", {
-        BackgroundColor3 = Library.MainColor;
-        BorderColor3 = Library.OutlineColor;
-        BorderMode = Enum.BorderMode.Inset;
-        Position = UDim2.new(0, 8, 0, 6);
-        Size = UDim2.fromOffset(ToggleWidth, 18);
+        AnchorPoint = Vector2.new(0, 0.5);
+        BackgroundTransparency = 1;
+        Position = UDim2.new(0, 7, 0, 13);
+        Size = UDim2.fromOffset(16, 16);
         AutoButtonColor = false;
         Image = "";
         ImageColor3 = Library.FontColor;
         ImageTransparency = 1;
-        BackgroundTransparency = 1;
         ScaleType = Enum.ScaleType.Fit;
-        ZIndex = 4;
+        ZIndex = 3;
         Visible = false;
-        Parent = MainSectionInner;
+        Parent = Inner;
     })
     Library:AddToRegistry(CollapseToggle, {
-        BackgroundColor3 = "MainColor";
-        BorderColor3 = "OutlineColor";
         ImageColor3 = "FontColor";
     })
-    TrackSidebar(CollapseToggle, "BackgroundTransparency", 0)
     TrackSidebar(CollapseToggle, "ImageTransparency", 0)
 
     -- Restyle callbacks registered by each tab (button geometry / selected look).
@@ -7305,10 +7305,11 @@ function Library:CreateWindow(...)
         local AreaGoal, ContainerGoal
         if IsSide then
             AreaGoal = {
-                Position = UDim2.new(0, 8, 0, 30);
-                Size = UDim2.new(0, SidebarWidth, 1, -(30 + FooterHeight + 14));
+                Position = UDim2.new(0, 8, 0, 8);
+                Size = UDim2.new(0, SidebarWidth, 1, -(8 + FooterHeight + 14));
             }
-            local Gutter = Collapsed and ToggleWidth or SidebarWidth
+            -- Collapsed: toggle lives in the header, so the content fills fully.
+            local Gutter = Collapsed and 0 or SidebarWidth
             ContainerGoal = {
                 Position = UDim2.new(0, 8 + Gutter + 6, 0, 4);
                 Size = UDim2.new(1, -(16 + Gutter + 6), 1, -12);
@@ -7327,7 +7328,8 @@ function Library:CreateWindow(...)
         TweenService:Create(TabArea, Info, AreaGoal):Play()
         TweenService:Create(TabContainer, Info, ContainerGoal):Play()
 
-        -- The collapse chevron shows whenever we're in Side mode.
+        -- The collapse chevron shows in the header (left of the title) whenever
+        -- we're in Side mode; the title text slides right to make room for it.
         CollapseToggle.Visible = IsSide
         if IsSide then
             local Icon = Library:GetCustomIcon(Collapsed and "chevron-right" or "chevron-left")
@@ -7337,6 +7339,9 @@ function Library:CreateWindow(...)
                 CollapseToggle.ImageRectSize = Icon.ImageRectSize
             end
         end
+        TweenService:Create(WindowLabel, Info, {
+            Position = UDim2.new(0, IsSide and 27 or 7, 0, 0);
+        }):Play()
 
         -- The tab column hides while collapsed; the footer shows only when the
         -- side-bar is expanded. Toggle Visible (not just transparency) so label
