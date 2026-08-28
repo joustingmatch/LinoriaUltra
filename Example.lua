@@ -753,13 +753,13 @@ SaveManager:SetSubFolder("specific-place") -- if the game has multiple places in
 -- Builds our config menu on the right side of our tab
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 
+-- Baked-in Interface groupbox: Menu layout (Top / Side) + Font selector.
+-- Added before the theme menu so it sits above it on the left side.
+Window:AddInterfaceGroupbox(Tabs["UI Settings"])
+
 -- Builds our theme menu (with plenty of built in themes) on the left side
 -- NOTE: you can also call ThemeManager:ApplyToGroupbox to add it to a specific groupbox
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
-
--- Baked-in Interface groupbox: adds a "Menu layout" dropdown (Top / Side) with an
--- animated swap between the classic top tab strip and the vertical side-bar.
-Window:AddInterfaceGroupbox(Tabs["UI Settings"])
 
 -- Optional: customise the side-bar footer (logo + title + subtitle).
 Window:SetFooter({

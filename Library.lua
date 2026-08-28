@@ -438,6 +438,25 @@ function Library:SetIconModule(module: IconModule)
     Icons = module
 end
 
+-- Live font switch: updates Library.Font and re-applies it to every text object
+-- currently under the library ScreenGui. Accepts an Enum.Font or its name.
+function Library:SetFont(Font)
+    if typeof(Font) == "string" then
+        Font = Enum.Font[Font]
+    end
+    if typeof(Font) ~= "EnumItem" then
+        return
+    end
+
+    Library.Font = Font
+
+    for _, Desc in next, ScreenGui:GetDescendants() do
+        if Desc:IsA("TextLabel") or Desc:IsA("TextBox") or Desc:IsA("TextButton") then
+            Desc.Font = Font
+        end
+    end
+end
+
 -- Strips RichText tags so search names match/display as plain text.
 local function StripRichText(Text: string): string
     return (tostring(Text):gsub("<[^>]->", ""))
@@ -4124,9 +4143,11 @@ do
         })
 
         local ToggleInner = Library:Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5);
             BackgroundColor3 = Library.MainColor;
             BorderColor3 = Library.OutlineColor;
             BorderMode = Enum.BorderMode.Inset;
+            Position = UDim2.new(0.5, 0, 0.5, 0);
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 6;
             Parent = ToggleOuter;
@@ -4135,6 +4156,12 @@ do
         Library:AddToRegistry(ToggleInner, {
             BackgroundColor3 = "MainColor";
             BorderColor3 = "OutlineColor";
+        })
+
+        -- Drives the smooth enable/disable animation for the fill.
+        local ToggleScale = Library:Create("UIScale", {
+            Scale = 1;
+            Parent = ToggleInner;
         })
 
         local ToggleLabel = Library:CreateLabel({
@@ -4187,12 +4214,31 @@ do
             Tooltip.Disabled = Toggle.Disabled
         end
 
-        function Toggle:Display()
+        local ToggleTweenInfo = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+        -- Smoothly tweens the fill toward its target colours (instant on the first paint).
+        local function AnimateToggle(BackColor, BorderColor, Instant)
+            if Instant then
+                ToggleInner.BackgroundColor3 = BackColor
+                ToggleInner.BorderColor3 = BorderColor
+                return
+            end
+
+            TweenService:Create(ToggleInner, ToggleTweenInfo, {
+                BackgroundColor3 = BackColor;
+                BorderColor3 = BorderColor;
+            }):Play()
+        end
+
+        function Toggle:Display(Instant)
             if Toggle.Disabled then
                 ToggleLabel.TextColor3 = Library.DisabledTextColor
 
-                ToggleInner.BackgroundColor3 = Toggle.Value and Library.DisabledAccentColor or Library.MainColor
-                ToggleInner.BorderColor3 = Library.DisabledOutlineColor
+                AnimateToggle(
+                    Toggle.Value and Library.DisabledAccentColor or Library.MainColor,
+                    Library.DisabledOutlineColor,
+                    Instant
+                )
 
                 Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and "DisabledAccentColor" or "MainColor"
                 Library.RegistryMap[ToggleInner].Properties.BorderColor3 = "DisabledOutlineColor"
@@ -4203,13 +4249,24 @@ do
 
             ToggleLabel.TextColor3 = Toggle.Risky and Library.RiskColor or Color3.new(1, 1, 1)
 
-            ToggleInner.BackgroundColor3 = Toggle.Value and Library.AccentColor or Library.MainColor
-            ToggleInner.BorderColor3 = Toggle.Value and Library.AccentColorDark or Library.OutlineColor
+            AnimateToggle(
+                Toggle.Value and Library.AccentColor or Library.MainColor,
+                Toggle.Value and Library.AccentColorDark or Library.OutlineColor,
+                Instant
+            )
 
             Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and "AccentColor" or "MainColor"
             Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and "AccentColorDark" or "OutlineColor"
 
             Library.RegistryMap[ToggleLabel].Properties.TextColor3 = Toggle.Risky and "RiskColor" or nil
+        end
+
+        -- Little scale pop on the fill whenever the toggle is flipped.
+        local function PopToggle()
+            ToggleScale.Scale = Toggle.Value and 0.6 or 1.25
+            TweenService:Create(ToggleScale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Scale = 1;
+            }):Play()
         end
 
         function Toggle:OnChanged(Func)
@@ -4231,6 +4288,7 @@ do
 
             Toggle.Value = Bool
             Toggle:Display()
+            PopToggle()
 
             for _, Addon in next, Toggle.Addons do
                 if Addon.Type == "KeyPicker" and Addon.SyncToggleState then
@@ -4296,7 +4354,7 @@ do
             Library:AddToRegistry(ToggleLabel, { TextColor3 = "RiskColor" })
         end
 
-        Toggle:Display()
+        Toggle:Display(true)
         Blank = Groupbox:AddBlank(Info.BlankSize or 5 + 2, Toggle.Visible)
         Groupbox:Resize()
 
@@ -7119,32 +7177,6 @@ function Library:CreateWindow(...)
         table.insert(SidebarElements, { Object = Object, Property = Property, Shown = Shown })
     end
 
-    local SidebarHeader = Library:CreateLabel({
-        Position = UDim2.new(0, 10, 0, 6);
-        Size = UDim2.new(0, SidebarWidth - 12, 0, 16);
-        Text = "Main";
-        TextSize = 14;
-        TextTransparency = 1;
-        TextXAlignment = Enum.TextXAlignment.Left;
-        ZIndex = 3;
-        Visible = false;
-        Parent = MainSectionInner;
-    })
-    TrackSidebar(SidebarHeader, "TextTransparency", 0.35)
-
-    local SidebarDivider = Library:Create("Frame", {
-        BackgroundColor3 = Library.OutlineColor;
-        BorderSizePixel = 0;
-        Position = UDim2.new(0, 8, 1, -(FooterHeight + 10));
-        Size = UDim2.new(0, SidebarWidth, 0, 1);
-        BackgroundTransparency = 1;
-        ZIndex = 3;
-        Visible = false;
-        Parent = MainSectionInner;
-    })
-    Library:AddToRegistry(SidebarDivider, { BackgroundColor3 = "OutlineColor"; })
-    TrackSidebar(SidebarDivider, "BackgroundTransparency", 0)
-
     local Footer = Library:Create("Frame", {
         BackgroundColor3 = Library.BackgroundColor;
         BorderColor3 = Color3.new(0, 0, 0);
@@ -7204,9 +7236,37 @@ function Library:CreateWindow(...)
     })
     TrackSidebar(FooterSubtitle, "TextTransparency", 0.4)
 
+    -- Collapse toggle: a small chevron button at the top of the side-bar that
+    -- hides the tab column / footer and widens the content pane.
+    local ToggleWidth = 22
+    local CollapseToggle = Library:Create("ImageButton", {
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3 = Library.OutlineColor;
+        BorderMode = Enum.BorderMode.Inset;
+        Position = UDim2.new(0, 8, 0, 6);
+        Size = UDim2.fromOffset(ToggleWidth, 18);
+        AutoButtonColor = false;
+        Image = "";
+        ImageColor3 = Library.FontColor;
+        ImageTransparency = 1;
+        BackgroundTransparency = 1;
+        ScaleType = Enum.ScaleType.Fit;
+        ZIndex = 4;
+        Visible = false;
+        Parent = MainSectionInner;
+    })
+    Library:AddToRegistry(CollapseToggle, {
+        BackgroundColor3 = "MainColor";
+        BorderColor3 = "OutlineColor";
+        ImageColor3 = "FontColor";
+    })
+    TrackSidebar(CollapseToggle, "BackgroundTransparency", 0)
+    TrackSidebar(CollapseToggle, "ImageTransparency", 0)
+
     -- Restyle callbacks registered by each tab (button geometry / selected look).
     Window.TabRestyles = {}
     Window.MenuLayout = (WindowInfo.MenuLayout == "Side") and "Side" or "Top"
+    Window.SidebarCollapsed = false
 
     function Window:SetFooter(Info)
         Info = Info or {}
@@ -7229,16 +7289,15 @@ function Library:CreateWindow(...)
         Logo = (WindowInfo.Logo ~= "" and WindowInfo.Logo) or nil,
     })
 
-    function Window:SetMenuLayout(Layout, Animate)
-        Layout = (Layout == "Side") and "Side" or "Top"
-        Window.MenuLayout = Layout
-
-        local IsSide = Layout == "Side"
+    -- Applies all side-bar geometry/visibility for the current MenuLayout and
+    -- SidebarCollapsed state. Driven by both SetMenuLayout and SetSidebarCollapsed.
+    local function ApplySidebar(Animate)
+        local IsSide = Window.MenuLayout == "Side"
+        local Collapsed = IsSide and Window.SidebarCollapsed
         local Info = TweenInfo.new(Animate and 0.28 or 0, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
         -- Layout properties can't be tweened; apply them up-front.
         TabListLayout.FillDirection = IsSide and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
-        -- Left-aligned in both modes (matches the original top tab strip).
         TabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
         TabListLayout.VerticalAlignment = IsSide and Enum.VerticalAlignment.Top or Enum.VerticalAlignment.Center
         TabArea.ScrollingDirection = IsSide and Enum.ScrollingDirection.Y or Enum.ScrollingDirection.X
@@ -7246,12 +7305,13 @@ function Library:CreateWindow(...)
         local AreaGoal, ContainerGoal
         if IsSide then
             AreaGoal = {
-                Position = UDim2.new(0, 8, 0, 26);
-                Size = UDim2.new(0, SidebarWidth, 1, -(26 + FooterHeight + 16));
+                Position = UDim2.new(0, 8, 0, 30);
+                Size = UDim2.new(0, SidebarWidth, 1, -(30 + FooterHeight + 14));
             }
+            local Gutter = Collapsed and ToggleWidth or SidebarWidth
             ContainerGoal = {
-                Position = UDim2.new(0, 8 + SidebarWidth + 6, 0, 4);
-                Size = UDim2.new(1, -(16 + SidebarWidth + 6), 1, -12);
+                Position = UDim2.new(0, 8 + Gutter + 6, 0, 4);
+                Size = UDim2.new(1, -(16 + Gutter + 6), 1, -12);
             }
         else
             AreaGoal = {
@@ -7267,37 +7327,68 @@ function Library:CreateWindow(...)
         TweenService:Create(TabArea, Info, AreaGoal):Play()
         TweenService:Create(TabContainer, Info, ContainerGoal):Play()
 
-        -- Fully hide the side-bar-only elements in Top mode. Fading transparency
-        -- alone leaves label text strokes visible, so toggle Visible as well:
-        -- show immediately when switching to Side, hide after the fade for Top.
+        -- The collapse chevron shows whenever we're in Side mode.
+        CollapseToggle.Visible = IsSide
+        if IsSide then
+            local Icon = Library:GetCustomIcon(Collapsed and "chevron-right" or "chevron-left")
+            if Icon then
+                CollapseToggle.Image = Icon.Url
+                CollapseToggle.ImageRectOffset = Icon.ImageRectOffset
+                CollapseToggle.ImageRectSize = Icon.ImageRectSize
+            end
+        end
+
+        -- The tab column hides while collapsed; the footer shows only when the
+        -- side-bar is expanded. Toggle Visible (not just transparency) so label
+        -- text strokes don't leak through in Top / collapsed states.
+        local ShowFooter = IsSide and not Collapsed
+        TabArea.Visible = (not IsSide) or (not Collapsed)
+
         Window.LayoutToken = (Window.LayoutToken or 0) + 1
         local Token = Window.LayoutToken
 
-        if IsSide then
-            SidebarHeader.Visible = true
-            SidebarDivider.Visible = true
-            Footer.Visible = true
-        end
+        if ShowFooter then Footer.Visible = true end
 
         for _, Entry in next, SidebarElements do
-            local Goal = IsSide and Entry.Shown or 1
-            TweenService:Create(Entry.Object, Info, { [Entry.Property] = Goal }):Play()
+            local Target
+            if Entry.Object == CollapseToggle then
+                Target = IsSide and Entry.Shown or 1
+            else
+                Target = ShowFooter and Entry.Shown or 1
+            end
+            TweenService:Create(Entry.Object, Info, { [Entry.Property] = Target }):Play()
         end
 
-        if not IsSide then
+        if not ShowFooter then
             task.delay(Animate and 0.28 or 0, function()
-                if Window.LayoutToken == Token and Window.MenuLayout ~= "Side" then
-                    SidebarHeader.Visible = false
-                    SidebarDivider.Visible = false
+                if Window.LayoutToken == Token and not (Window.MenuLayout == "Side" and not Window.SidebarCollapsed) then
                     Footer.Visible = false
                 end
             end)
         end
+    end
+
+    function Window:SetMenuLayout(Layout, Animate)
+        Window.MenuLayout = (Layout == "Side") and "Side" or "Top"
+        ApplySidebar(Animate)
 
         for _, Restyle in next, Window.TabRestyles do
-            Library:SafeCallback(Restyle, Layout, Animate)
+            Library:SafeCallback(Restyle, Window.MenuLayout, Animate)
         end
     end
+
+    function Window:SetSidebarCollapsed(Collapsed, Animate)
+        Window.SidebarCollapsed = not not Collapsed
+        ApplySidebar(Animate)
+    end
+
+    function Window:ToggleSidebar()
+        Window:SetSidebarCollapsed(not Window.SidebarCollapsed, true)
+    end
+
+    CollapseToggle.MouseButton1Click:Connect(function()
+        Window:ToggleSidebar()
+    end)
 
     function Window:SetWindowTitle(Title)
         if typeof(Title) == "string" then
@@ -8851,6 +8942,33 @@ end
             Default = Window.MenuLayout,
             Callback = function(Value)
                 Window:SetMenuLayout(Value, true)
+            end,
+        })
+
+        -- Font selector (display name -> Enum.Font name).
+        local FontMap = {
+            ["Arimo"] = "Arimo",
+            ["Code"] = "Code",
+            ["Gotham"] = "Gotham",
+            ["Source Sans"] = "SourceSans",
+            ["Ubuntu"] = "Ubuntu",
+        }
+        local FontOrder = { "Arimo", "Code", "Gotham", "Source Sans", "Ubuntu" }
+
+        local DefaultFont = "Code"
+        for Display, EnumName in pairs(FontMap) do
+            if EnumName == Library.Font.Name then
+                DefaultFont = Display
+                break
+            end
+        end
+
+        Groupbox:AddDropdown("InterfaceFont", {
+            Text = "Font",
+            Values = FontOrder,
+            Default = DefaultFont,
+            Callback = function(Value)
+                Library:SetFont(FontMap[Value] or "Code")
             end,
         })
 
