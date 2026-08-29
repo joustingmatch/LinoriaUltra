@@ -2850,8 +2850,12 @@ do
             BorderColor3 = Color3.new(0, 0, 0);
             ZIndex = 20;
             Visible = false;
+            ClipsDescendants = true;
             Parent = ScreenGui;
         })
+
+        -- Tween used for the smooth open/close reveal of the list.
+        local DropdownRevealTween = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
         local OpenedXSizeForList = 0
 
@@ -3187,14 +3191,19 @@ do
             
             ListOuter.Visible = true
             Library.OpenedFrames[ListOuter] = true
-            DropdownArrow.Rotation = 180
 
             Dropdown:Display()
             RecalculateListSize()
+
+            -- Smooth reveal: grow the list down from zero height.
+            local FullSize = ListOuter.Size
+            ListOuter.Size = UDim2.new(FullSize.X.Scale, FullSize.X.Offset, 0, 0)
+            TweenService:Create(ListOuter, DropdownRevealTween, { Size = FullSize }):Play()
+            TweenService:Create(DropdownArrow, DropdownRevealTween, { Rotation = 180 }):Play()
         end
 
         function Dropdown:CloseDropdown()
-            if Library.IsMobile then         
+            if Library.IsMobile then
                 Library.CanDrag = true
             end
 
@@ -3203,13 +3212,21 @@ do
                 DropdownInnerSearch.Visible = false
                 ItemList.Visible = true
             end
-        
-            ListOuter.Visible = false
+
             Library.OpenedFrames[ListOuter] = nil
-            DropdownArrow.Rotation = 0
+
+            -- Collapse upward, then hide once the tween finishes.
+            local Collapsed = UDim2.new(ListOuter.Size.X.Scale, ListOuter.Size.X.Offset, 0, 0)
+            local RevealTween = TweenService:Create(ListOuter, DropdownRevealTween, { Size = Collapsed })
+            RevealTween:Play()
+            RevealTween.Completed:Once(function()
+                if not Library.OpenedFrames[ListOuter] then
+                    ListOuter.Visible = false
+                end
+            end)
+            TweenService:Create(DropdownArrow, DropdownRevealTween, { Rotation = 0 }):Play()
 
             Dropdown:Display()
-            RecalculateListSize()
         end
 
         function Dropdown:OnChanged(Func)
@@ -4921,8 +4938,12 @@ do
             BorderColor3 = Color3.new(0, 0, 0);
             ZIndex = 20;
             Visible = false;
+            ClipsDescendants = true;
             Parent = ScreenGui;
         })
+
+        -- Tween used for the smooth open/close reveal of the list.
+        local DropdownRevealTween = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
         local function RecalculateListPosition()
             ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1)
@@ -5248,13 +5269,18 @@ do
 
             ListOuter.Visible = true
             Library.OpenedFrames[ListOuter] = true
-            DropdownArrow.Rotation = 180
 
             RecalculateListSize()
+
+            -- Smooth reveal: grow the list down from zero height.
+            local FullSize = ListOuter.Size
+            ListOuter.Size = UDim2.new(FullSize.X.Scale, FullSize.X.Offset, 0, 0)
+            TweenService:Create(ListOuter, DropdownRevealTween, { Size = FullSize }):Play()
+            TweenService:Create(DropdownArrow, DropdownRevealTween, { Rotation = 180 }):Play()
         end
 
         function Dropdown:CloseDropdown()
-            if Library.IsMobile then            
+            if Library.IsMobile then
                 Library.CanDrag = true
             end
 
@@ -5264,9 +5290,18 @@ do
                 ItemList.Visible = true
             end
 
-            ListOuter.Visible = false
             Library.OpenedFrames[ListOuter] = nil
-            DropdownArrow.Rotation = 0
+
+            -- Collapse upward, then hide once the tween finishes.
+            local Collapsed = UDim2.new(ListOuter.Size.X.Scale, ListOuter.Size.X.Offset, 0, 0)
+            local RevealTween = TweenService:Create(ListOuter, DropdownRevealTween, { Size = Collapsed })
+            RevealTween:Play()
+            RevealTween.Completed:Once(function()
+                if not Library.OpenedFrames[ListOuter] then
+                    ListOuter.Visible = false
+                end
+            end)
+            TweenService:Create(DropdownArrow, DropdownRevealTween, { Rotation = 0 }):Play()
         end
 
         function Dropdown:OnChanged(Func)
@@ -6863,7 +6898,7 @@ function Library:CreateWindow(...)
         SearchBox = Library:Create("TextBox", {
             BackgroundTransparency = 1;
             Position = UDim2.new(0, 22, 0, 0);
-            Size = UDim2.new(1, -28, 1, 0);
+            Size = UDim2.new(1, -40, 1, 0);
             Font = Library.Font;
             PlaceholderColor3 = Color3.fromRGB(150, 150, 150);
             PlaceholderText = WindowInfo.SearchbarPlaceholder;
@@ -6883,6 +6918,65 @@ function Library:CreateWindow(...)
         })
 
         Window.SearchBox = SearchBox
+
+        --// Searchbar polish: focus highlight + clear button \\--
+        local SearchTween = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+        -- Accent underline that wipes in from the centre while focused.
+        local SearchUnderline = Library:Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 1);
+            BackgroundColor3 = Library.AccentColor;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0.5, 0, 1, 0);
+            Size = UDim2.new(0, 0, 0, 1);
+            ZIndex = 4;
+            Parent = SearchOuter;
+        })
+        Library:AddToRegistry(SearchUnderline, { BackgroundColor3 = "AccentColor"; })
+
+        -- Clear (x) button, shown only when there's text.
+        local SearchClear = Library:Create("ImageButton", {
+            AnchorPoint = Vector2.new(1, 0.5);
+            BackgroundTransparency = 1;
+            Position = UDim2.new(1, -5, 0.5, 0);
+            Size = UDim2.fromOffset(11, 11);
+            AutoButtonColor = false;
+            Image = "";
+            ImageColor3 = Library.FontColor;
+            ImageTransparency = 0.25;
+            ScaleType = Enum.ScaleType.Fit;
+            Visible = false;
+            ZIndex = 4;
+            Parent = SearchOuter;
+        })
+        local ClearIconAsset = Library:GetCustomIcon("x")
+        if ClearIconAsset then
+            SearchClear.Image = ClearIconAsset.Url
+            SearchClear.ImageRectOffset = ClearIconAsset.ImageRectOffset
+            SearchClear.ImageRectSize = ClearIconAsset.ImageRectSize
+        end
+        Library:AddToRegistry(SearchClear, { ImageColor3 = "FontColor"; }, true)
+
+        SearchClear.MouseButton1Click:Connect(function()
+            SearchBox.Text = ""
+            SearchBox:CaptureFocus()
+        end)
+
+        SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+            SearchClear.Visible = SearchBox.Text ~= ""
+        end)
+
+        SearchBox.Focused:Connect(function()
+            TweenService:Create(SearchOuter, SearchTween, { BorderColor3 = Library.AccentColor }):Play()
+            TweenService:Create(SearchIcon, SearchTween, { ImageTransparency = 0 }):Play()
+            TweenService:Create(SearchUnderline, SearchTween, { Size = UDim2.new(1, 0, 0, 1) }):Play()
+        end)
+
+        SearchBox.FocusLost:Connect(function()
+            TweenService:Create(SearchOuter, SearchTween, { BorderColor3 = Library.OutlineColor }):Play()
+            TweenService:Create(SearchIcon, SearchTween, { ImageTransparency = 0.2 }):Play()
+            TweenService:Create(SearchUnderline, SearchTween, { Size = UDim2.new(0, 0, 0, 1) }):Play()
+        end)
 
         --// Auto-results popup \\--
         local ROW_HEIGHT = 34
@@ -8098,11 +8192,22 @@ function Library:CreateWindow(...)
             BorderColor3 = "OutlineColor";
         })
 
+        -- Hover glow (inactive tabs lighten on mouseover).
+        local TabHover = Library:Create("Frame", {
+            BackgroundColor3 = Library.AccentColor;
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Size = UDim2.new(1, 0, 1, 0);
+            ZIndex = 2;
+            Parent = TabButton;
+        })
+        Library:AddToRegistry(TabHover, { BackgroundColor3 = "AccentColor"; })
+
         local TabButtonLabel = Library:CreateLabel({
             Position = UDim2.new(0, 0, 0, 0);
             Size = UDim2.new(1, 0, 1, -1);
             Text = Tab.Name;
-            ZIndex = 1;
+            ZIndex = 3;
             Parent = TabButton;
         })
 
@@ -8132,8 +8237,23 @@ function Library:CreateWindow(...)
         })
         Library:AddToRegistry(SelectionHighlight, { BackgroundColor3 = "AccentColor"; })
 
+        -- Accent underline shown beneath the active tab while in Top layout.
+        local TopIndicator = Library:Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 1);
+            BackgroundColor3 = Library.AccentColor;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0.5, 0, 1, 0);
+            Size = UDim2.new(0, 0, 0, 2);
+            Visible = false;
+            ZIndex = 4;
+            Parent = TabButton;
+        })
+        Library:AddToRegistry(TopIndicator, { BackgroundColor3 = "AccentColor"; })
+
         Tab.ButtonWidth = TabButtonWidth
         Tab.Active = false
+
+        local VisualTween = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
         -- Applies the active/inactive look, honouring the current menu layout.
         local function UpdateSelectedVisual()
@@ -8143,15 +8263,41 @@ function Library:CreateWindow(...)
             SelectionHighlight.Visible = IsSide and Active
             Blocker.BackgroundTransparency = (not IsSide) and Active and 0 or 1
 
-            if Active then
-                TabButton.BackgroundColor3 = Library.MainColor
-                Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "MainColor"
+            -- Top-layout accent underline: wipe in/out from the centre.
+            if not IsSide and Active then
+                TopIndicator.Visible = true
+                TweenService:Create(TopIndicator, VisualTween, { Size = UDim2.new(1, -6, 0, 2) }):Play()
             else
-                TabButton.BackgroundColor3 = Library.BackgroundColor
-                Library.RegistryMap[TabButton].Properties.BackgroundColor3 = "BackgroundColor"
+                local Tween = TweenService:Create(TopIndicator, VisualTween, { Size = UDim2.new(0, 0, 0, 2) })
+                Tween:Play()
+                Tween.Completed:Once(function()
+                    if not (Tab.Active and Window.MenuLayout ~= "Side") then
+                        TopIndicator.Visible = false
+                    end
+                end)
             end
+
+            -- Clear any hover glow once a tab becomes active.
+            if Active then
+                TweenService:Create(TabHover, VisualTween, { BackgroundTransparency = 1 }):Play()
+            end
+
+            local TargetName = Active and "MainColor" or "BackgroundColor"
+            local TargetColor = Active and Library.MainColor or Library.BackgroundColor
+            Library.RegistryMap[TabButton].Properties.BackgroundColor3 = TargetName
+            TweenService:Create(TabButton, VisualTween, { BackgroundColor3 = TargetColor }):Play()
         end
         Tab.UpdateSelectedVisual = UpdateSelectedVisual
+
+        -- Hover glow for inactive tabs.
+        TabButton.MouseEnter:Connect(function()
+            if not Tab.Active then
+                TweenService:Create(TabHover, VisualTween, { BackgroundTransparency = 0.88 }):Play()
+            end
+        end)
+        TabButton.MouseLeave:Connect(function()
+            TweenService:Create(TabHover, VisualTween, { BackgroundTransparency = 1 }):Play()
+        end)
 
         -- Reshapes the tab button between the horizontal (Top) and vertical (Side) strips.
         local function ApplyTabLayout(Layout, Animate)
