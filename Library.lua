@@ -6944,34 +6944,6 @@ function Library:CreateWindow(...)
     })
 
     --// Header bar polish \\--
-    -- Subtle gradient title-bar strip behind the header content.
-    local HeaderBar = Library:Create("Frame", {
-        BackgroundColor3 = Library.MainColor;
-        BorderSizePixel = 0;
-        Position = UDim2.new(0, 0, 0, 0);
-        Size = UDim2.new(1, 0, 0, 24);
-        ZIndex = 1;
-        Parent = Inner;
-    })
-    Library:AddToRegistry(HeaderBar, { BackgroundColor3 = "MainColor"; })
-
-    local HeaderGradient = Library:Create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Library.MainColor),
-            ColorSequenceKeypoint.new(1, Library:GetDarkerColor(Library.MainColor)),
-        });
-        Rotation = 90;
-        Parent = HeaderBar;
-    })
-    Library:AddToRegistry(HeaderGradient, {
-        Color = function()
-            return ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Library.MainColor),
-                ColorSequenceKeypoint.new(1, Library:GetDarkerColor(Library.MainColor)),
-            })
-        end
-    })
-
     -- Accent underline separating the header from the content, fading at the edges.
     local HeaderUnderline = Library:Create("Frame", {
         BackgroundColor3 = Library.AccentColor;
