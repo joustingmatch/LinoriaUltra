@@ -2863,8 +2863,11 @@ do
             ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1)
         end
 
+        -- Height of the in-popup search header (0 when the dropdown isn't searchable).
+        local SearchHeaderHeight = Info.Searchable and 24 or 0
+
         local function RecalculateListSize(YSize)
-            local Y = YSize or math.clamp(GetTableSize(Dropdown.Values) * (20 * DPIScale), 0, MAX_DROPDOWN_ITEMS * (20 * DPIScale)) + 1
+            local Y = (YSize or math.clamp(GetTableSize(Dropdown.Values) * (20 * DPIScale), 0, MAX_DROPDOWN_ITEMS * (20 * DPIScale)) + 1) + SearchHeaderHeight
             ListOuter.Size = UDim2.fromOffset(ListOuter.Visible and OpenedXSizeForList or DropdownOuter.AbsoluteSize.X + 0.5, Y)
         end
 
@@ -2893,7 +2896,8 @@ do
             BackgroundTransparency = 1;
             BorderSizePixel = 0;
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            Size = UDim2.new(1, 0, 1, 0);
+            Position = UDim2.new(0, 0, 0, SearchHeaderHeight);
+            Size = UDim2.new(1, 0, 1, -SearchHeaderHeight);
             ZIndex = 21;
             Parent = ListInner;
 
@@ -2914,6 +2918,49 @@ do
             SortOrder = Enum.SortOrder.LayoutOrder;
             Parent = Scrolling;
         })
+
+        -- Styled search header pinned to the top of the popup (matches the mockup):
+        -- magnifier icon + "Search..." field + a divider above the list.
+        if Info.Searchable and DropdownInnerSearch then
+            local SearchHeader = Library:Create("Frame", {
+                BackgroundColor3 = Library.BackgroundColor;
+                BorderColor3 = Library.OutlineColor;
+                BorderMode = Enum.BorderMode.Inset;
+                Position = UDim2.new(0, 4, 0, 3);
+                Size = UDim2.new(1, -8, 0, SearchHeaderHeight - 6);
+                ZIndex = 22;
+                Parent = ListInner;
+            })
+            Library:AddToRegistry(SearchHeader, {
+                BackgroundColor3 = "BackgroundColor";
+                BorderColor3 = "OutlineColor";
+            })
+
+            local SearchGlyph = Library:Create("ImageLabel", {
+                AnchorPoint = Vector2.new(0, 0.5);
+                BackgroundTransparency = 1;
+                Position = UDim2.new(0, 5, 0.5, 0);
+                Size = UDim2.fromOffset(11, 11);
+                ImageColor3 = Library.FontColor;
+                ImageTransparency = 0.35;
+                ZIndex = 23;
+                Parent = SearchHeader;
+            })
+            local GlyphAsset = Library:GetCustomIcon("search")
+            if GlyphAsset then
+                SearchGlyph.Image = GlyphAsset.Url
+                SearchGlyph.ImageRectOffset = GlyphAsset.ImageRectOffset
+                SearchGlyph.ImageRectSize = GlyphAsset.ImageRectSize
+            end
+            Library:AddToRegistry(SearchGlyph, { ImageColor3 = "FontColor"; }, true)
+
+            -- Re-home the search box into the header instead of the field.
+            DropdownInnerSearch.Parent = SearchHeader
+            DropdownInnerSearch.Position = UDim2.new(0, 21, 0, 0)
+            DropdownInnerSearch.Size = UDim2.new(1, -25, 1, 0)
+            DropdownInnerSearch.ZIndex = 23
+            DropdownInnerSearch.Visible = true
+        end
 
         function Dropdown:UpdateColors()
             ItemList.TextColor3 = Dropdown.Disabled and Library.DisabledAccentColor or Color3.new(1, 1, 1)
@@ -3184,9 +3231,13 @@ do
             end
 
             if Info.Searchable then
-                ItemList.Visible = false
                 DropdownInnerSearch.Text = ""
-                DropdownInnerSearch.Visible = true
+                -- Defer focus until the popup is actually visible.
+                task.defer(function()
+                    if ListOuter.Visible then
+                        DropdownInnerSearch:CaptureFocus()
+                    end
+                end)
             end
             
             ListOuter.Visible = true
@@ -3209,8 +3260,6 @@ do
 
             if Info.Searchable then
                 DropdownInnerSearch.Text = ""
-                DropdownInnerSearch.Visible = false
-                ItemList.Visible = true
             end
 
             Library.OpenedFrames[ListOuter] = nil
@@ -4949,8 +4998,11 @@ do
             ListOuter.Position = UDim2.fromOffset(DropdownOuter.AbsolutePosition.X, DropdownOuter.AbsolutePosition.Y + DropdownOuter.Size.Y.Offset + 1)
         end
 
+        -- Height of the in-popup search header (0 when the dropdown isn't searchable).
+        local SearchHeaderHeight = Info.Searchable and 24 or 0
+
         local function RecalculateListSize(YSize)
-            local Y = YSize or math.clamp(GetTableSize(Dropdown.Values) * (20 * DPIScale), 0, MAX_DROPDOWN_ITEMS * (20 * DPIScale)) + 1
+            local Y = (YSize or math.clamp(GetTableSize(Dropdown.Values) * (20 * DPIScale), 0, MAX_DROPDOWN_ITEMS * (20 * DPIScale)) + 1) + SearchHeaderHeight
             ListOuter.Size = UDim2.fromOffset(DropdownOuter.AbsoluteSize.X + 0.5, Y)
         end
 
@@ -4978,7 +5030,8 @@ do
             BackgroundTransparency = 1;
             BorderSizePixel = 0;
             CanvasSize = UDim2.new(0, 0, 0, 0);
-            Size = UDim2.new(1, 0, 1, 0);
+            Position = UDim2.new(0, 0, 0, SearchHeaderHeight);
+            Size = UDim2.new(1, 0, 1, -SearchHeaderHeight);
             ZIndex = 21;
             Parent = ListInner;
 
@@ -4999,6 +5052,49 @@ do
             SortOrder = Enum.SortOrder.LayoutOrder;
             Parent = Scrolling;
         })
+
+        -- Styled search header pinned to the top of the popup (matches the mockup):
+        -- magnifier icon + "Search..." field + a divider above the list.
+        if Info.Searchable and DropdownInnerSearch then
+            local SearchHeader = Library:Create("Frame", {
+                BackgroundColor3 = Library.BackgroundColor;
+                BorderColor3 = Library.OutlineColor;
+                BorderMode = Enum.BorderMode.Inset;
+                Position = UDim2.new(0, 4, 0, 3);
+                Size = UDim2.new(1, -8, 0, SearchHeaderHeight - 6);
+                ZIndex = 22;
+                Parent = ListInner;
+            })
+            Library:AddToRegistry(SearchHeader, {
+                BackgroundColor3 = "BackgroundColor";
+                BorderColor3 = "OutlineColor";
+            })
+
+            local SearchGlyph = Library:Create("ImageLabel", {
+                AnchorPoint = Vector2.new(0, 0.5);
+                BackgroundTransparency = 1;
+                Position = UDim2.new(0, 5, 0.5, 0);
+                Size = UDim2.fromOffset(11, 11);
+                ImageColor3 = Library.FontColor;
+                ImageTransparency = 0.35;
+                ZIndex = 23;
+                Parent = SearchHeader;
+            })
+            local GlyphAsset = Library:GetCustomIcon("search")
+            if GlyphAsset then
+                SearchGlyph.Image = GlyphAsset.Url
+                SearchGlyph.ImageRectOffset = GlyphAsset.ImageRectOffset
+                SearchGlyph.ImageRectSize = GlyphAsset.ImageRectSize
+            end
+            Library:AddToRegistry(SearchGlyph, { ImageColor3 = "FontColor"; }, true)
+
+            -- Re-home the search box into the header instead of the field.
+            DropdownInnerSearch.Parent = SearchHeader
+            DropdownInnerSearch.Position = UDim2.new(0, 21, 0, 0)
+            DropdownInnerSearch.Size = UDim2.new(1, -25, 1, 0)
+            DropdownInnerSearch.ZIndex = 23
+            DropdownInnerSearch.Visible = true
+        end
 
         function Dropdown:UpdateColors()
             if DropdownLabel then
@@ -5262,9 +5358,13 @@ do
             end
 
             if Info.Searchable then
-                ItemList.Visible = false
                 DropdownInnerSearch.Text = ""
-                DropdownInnerSearch.Visible = true
+                -- Defer focus until the popup is actually visible.
+                task.defer(function()
+                    if ListOuter.Visible then
+                        DropdownInnerSearch:CaptureFocus()
+                    end
+                end)
             end
 
             ListOuter.Visible = true
@@ -5286,8 +5386,6 @@ do
 
             if Info.Searchable then
                 DropdownInnerSearch.Text = ""
-                DropdownInnerSearch.Visible = false
-                ItemList.Visible = true
             end
 
             Library.OpenedFrames[ListOuter] = nil
