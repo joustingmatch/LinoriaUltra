@@ -6943,12 +6943,75 @@ function Library:CreateWindow(...)
         BorderColor3 = "AccentColor";
     })
 
-    local WindowLabel = Library:CreateLabel({
-        Position = UDim2.new(0, 7, 0, 0);
-        Size = UDim2.new(0, 0, 0, 25);
-        Text = WindowInfo.Title or "";
-        TextXAlignment = Enum.TextXAlignment.Left;
+    --// Header bar polish \\--
+    -- Subtle gradient title-bar strip behind the header content.
+    local HeaderBar = Library:Create("Frame", {
+        BackgroundColor3 = Library.MainColor;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(1, 0, 0, 24);
         ZIndex = 1;
+        Parent = Inner;
+    })
+    Library:AddToRegistry(HeaderBar, { BackgroundColor3 = "MainColor"; })
+
+    local HeaderGradient = Library:Create("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Library.MainColor),
+            ColorSequenceKeypoint.new(1, Library:GetDarkerColor(Library.MainColor)),
+        });
+        Rotation = 90;
+        Parent = HeaderBar;
+    })
+    Library:AddToRegistry(HeaderGradient, {
+        Color = function()
+            return ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Library.MainColor),
+                ColorSequenceKeypoint.new(1, Library:GetDarkerColor(Library.MainColor)),
+            })
+        end
+    })
+
+    -- Accent underline separating the header from the content, fading at the edges.
+    local HeaderUnderline = Library:Create("Frame", {
+        BackgroundColor3 = Library.AccentColor;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 0, 0, 24);
+        Size = UDim2.new(1, 0, 0, 1);
+        ZIndex = 2;
+        Parent = Inner;
+    })
+    Library:AddToRegistry(HeaderUnderline, { BackgroundColor3 = "AccentColor"; })
+    Library:Create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        });
+        Parent = HeaderUnderline;
+    })
+
+    -- Small accent mark to the left of the title.
+    local HeaderMark = Library:Create("Frame", {
+        AnchorPoint = Vector2.new(0, 0.5);
+        BackgroundColor3 = Library.AccentColor;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 7, 0, 12);
+        Size = UDim2.fromOffset(3, 12);
+        ZIndex = 2;
+        Parent = Inner;
+    })
+    Library:Create("UICorner", { CornerRadius = UDim.new(0, 2); Parent = HeaderMark; })
+    Library:AddToRegistry(HeaderMark, { BackgroundColor3 = "AccentColor"; })
+    Window.HeaderMark = HeaderMark
+
+    local WindowLabel = Library:CreateLabel({
+        Position = UDim2.new(0, 15, 0, 0);
+        Size = UDim2.new(0, 0, 0, 24);
+        Text = WindowInfo.Title or "";
+        TextSize = 15;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        ZIndex = 3;
         Parent = Inner;
     })
 
@@ -7687,8 +7750,11 @@ function Library:CreateWindow(...)
                 CollapseToggle.ImageRectSize = Icon.ImageRectSize
             end
         end
+        -- In Side mode the chevron occupies the title's left slot, so hide the
+        -- accent mark and push the title past the chevron.
+        HeaderMark.Visible = not IsSide
         TweenService:Create(WindowLabel, Info, {
-            Position = UDim2.new(0, IsSide and 27 or 7, 0, 0);
+            Position = UDim2.new(0, IsSide and 27 or 15, 0, 0);
         }):Play()
 
         -- The tab column hides while collapsed; the footer shows only when the
