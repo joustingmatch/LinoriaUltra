@@ -7622,17 +7622,37 @@ function Library:CreateWindow(...)
     Library:AddToRegistry(FooterLogo, { ImageColor3 = "AccentColor"; })
     TrackSidebar(FooterLogo, "ImageTransparency", 0)
 
+    -- Both lines live in one left-aligned column, so they always share an edge.
+    local FooterText = Library:Create("Frame", {
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 12, 0, 1);
+        Size = UDim2.new(1, -16, 1, -1);
+        ZIndex = 4;
+        Parent = Footer;
+    })
+
+    Library:Create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Vertical;
+        HorizontalAlignment = Enum.HorizontalAlignment.Left;
+        VerticalAlignment = Enum.VerticalAlignment.Center;
+        SortOrder = Enum.SortOrder.LayoutOrder;
+        Padding = UDim.new(0, 1);
+        Parent = FooterText;
+    })
+
     local FooterTitle = Library:CreateLabel({
-        Position = UDim2.new(0, 12, 0, 12);
-        Size = UDim2.new(1, -16, 0, 16);
+        LayoutOrder = 1;
+        Size = UDim2.new(1, 0, 0, 16);
         Text = "";
         TextSize = 14;
         TextColor3 = Library.AccentColor;
         TextTruncate = Enum.TextTruncate.AtEnd;
         TextXAlignment = Enum.TextXAlignment.Left;
+        TextYAlignment = Enum.TextYAlignment.Center;
         TextTransparency = 1;
         ZIndex = 4;
-        Parent = Footer;
+        Parent = FooterText;
     })
     -- Accent colour, kept in sync with the theme.
     Library.RegistryMap[FooterTitle].Properties.TextColor3 = "AccentColor"
@@ -7640,15 +7660,16 @@ function Library:CreateWindow(...)
     TrackSidebar(FooterTitle, "TextTransparency", 0)
 
     local FooterSubtitle = Library:CreateLabel({
-        Position = UDim2.new(0, 12, 0, 28);
-        Size = UDim2.new(1, -16, 0, 14);
+        LayoutOrder = 2;
+        Size = UDim2.new(1, 0, 0, 14);
         Text = "";
         TextSize = 12;
         TextTruncate = Enum.TextTruncate.AtEnd;
         TextXAlignment = Enum.TextXAlignment.Left;
+        TextYAlignment = Enum.TextYAlignment.Center;
         TextTransparency = 1;
         ZIndex = 4;
-        Parent = Footer;
+        Parent = FooterText;
     })
     TrackSidebar(FooterSubtitle, "TextTransparency", 0.35)
 
@@ -7683,19 +7704,16 @@ function Library:CreateWindow(...)
     -- one line of text or two.
     local function LayoutFooter()
         local HasIcon = FooterLogo.Image ~= ""
-        local HasSubtitle = FooterSubtitle.Text ~= ""
-        -- Text lines up with the tab labels above (12px, or past the icon).
-        local TextX = HasIcon and 36 or 12
-        local Width = UDim2.new(1, -(TextX + 4), 0, 0)
+
+        -- The column starts where the tab labels above it do (12px), or just
+        -- past the icon when there is one.
+        local TextX = HasIcon and 34 or 12
 
         FooterLogo.Visible = HasIcon
-        FooterSubtitle.Visible = HasSubtitle
+        FooterSubtitle.Visible = FooterSubtitle.Text ~= ""
 
-        FooterTitle.Position = UDim2.new(0, TextX, 0, HasSubtitle and 12 or 19)
-        FooterTitle.Size = Width + UDim2.fromOffset(0, 16)
-
-        FooterSubtitle.Position = UDim2.new(0, TextX, 0, 29)
-        FooterSubtitle.Size = Width + UDim2.fromOffset(0, 14)
+        FooterText.Position = UDim2.new(0, TextX, 0, 1)
+        FooterText.Size = UDim2.new(1, -(TextX + 4), 1, -1)
     end
 
     -- Everything on the footer is caller-controlled. Accepted keys:
@@ -7708,8 +7726,8 @@ function Library:CreateWindow(...)
     function Window:SetFooter(Info)
         Info = Info or {}
 
-        if typeof(Info.Title) == "string" then FooterTitle.Text = Info.Title end
-        if typeof(Info.Subtitle) == "string" then FooterSubtitle.Text = Info.Subtitle end
+        if typeof(Info.Title) == "string" then FooterTitle.Text = (Info.Title:gsub("^%s+", ""):gsub("%s+$", "")) end
+        if typeof(Info.Subtitle) == "string" then FooterSubtitle.Text = (Info.Subtitle:gsub("^%s+", ""):gsub("%s+$", "")) end
 
         local IconValue = Info.Icon
         if IconValue == nil then IconValue = Info.Logo end
@@ -9083,9 +9101,10 @@ end
             Groupbox.Label = GroupboxLabel
 
             --// Collapsing \--
-            -- Opt-in per groupbox. The header turns into a click target and
-            -- grows an arrow on the right; the body is clipped away on a tween.
-            local Collapsible = Info.Collapsible == true
+            -- On by default: every groupbox header is a click target with an
+            -- arrow on the right, and the body is clipped away on a tween.
+            -- Pass Collapsible = false to opt a box out.
+            local Collapsible = Info.Collapsible ~= false
             Groupbox.Collapsible = Collapsible
             Groupbox.Collapsed = Collapsible and Info.Collapsed == true
 
@@ -9173,9 +9192,9 @@ end
             return Groupbox
         end
 
-        -- Tab:AddLeftGroupbox("Name") or Tab:AddLeftGroupbox("Name", true) for a
-        -- collapsible box; the table form also takes Collapsed = true to start
-        -- it closed.
+        -- Groupboxes collapse by default. Pass false as the second argument to
+        -- opt one out; the table form also takes Collapsed = true to start it
+        -- closed.
         function Tab:AddLeftGroupbox(Name, Collapsible)
             if typeof(Name) == "table" then
                 return Tab:AddGroupbox({ Side = 1; Name = Name.Name; Collapsible = Name.Collapsible; Collapsed = Name.Collapsed; })
