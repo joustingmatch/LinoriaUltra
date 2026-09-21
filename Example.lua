@@ -69,6 +69,11 @@ local Tabs = {
 
 -- Groupbox and Tabbox inherit the same functions
 -- except Tabboxes you have to call the functions on a tab (Tabbox:AddTab(name))
+-- Pass `true` as the second argument for a collapsible groupbox (its header
+-- grows an arrow and clicking it folds the box away):
+--   Tabs.Main:AddLeftGroupbox("Groupbox", true)
+--   Tabs.Main:AddLeftGroupbox({ Name = "Groupbox", Collapsible = true, Collapsed = true })
+-- and it can be driven from code with Groupbox:SetCollapsed(true) / :ToggleCollapsed()
 local LeftGroupBox = Tabs.Main:AddLeftGroupbox("Groupbox")
 
 -- We can also get our Main tab via the following code:

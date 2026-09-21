@@ -226,6 +226,12 @@ end
 
 local DPIScale = 1;
 
+-- CanvasGroup lets a whole tab fade as one unit; older clients fall back to
+-- the slide alone.
+local SupportsCanvasGroup = pcall(function()
+    Instance.new("CanvasGroup"):Destroy()
+end)
+
 -- Groupbox / tabbox header geometry (shared so both stay in sync).
 local GROUPBOX_HEADER_HEIGHT = 26;
 local GROUPBOX_PADDING = 6;
@@ -6491,7 +6497,7 @@ do
 
     local WatermarkInner = Library:Create("Frame", {
         BackgroundColor3 = Library.MainColor;
-        BorderColor3 = Library.AccentColor;
+        BorderColor3 = Library.OutlineColor;
         BorderMode = Enum.BorderMode.Inset;
         Size = UDim2.new(1, 0, 1, 0);
         ZIndex = 201;
@@ -6499,7 +6505,7 @@ do
     })
 
     Library:AddToRegistry(WatermarkInner, {
-        BorderColor3 = "AccentColor";
+        BorderColor3 = "OutlineColor";
     })
 
     local InnerFrame = Library:Create("Frame", {
@@ -7514,6 +7520,7 @@ function Library:CreateWindow(...)
     local TabContainer = Library:Create("Frame", {
         BackgroundColor3 = Library.MainColor;
         BorderColor3 = Library.OutlineColor;
+        ClipsDescendants = true;
         Position = UDim2.new(0, 8, 0, 30);
         Size = UDim2.new(1, -16, 1, -38);
         ZIndex = 2;
@@ -8601,15 +8608,33 @@ function Library:CreateWindow(...)
         end
         table.insert(Window.TabRestyles, ApplyTabLayout)
 
-        local TabFrame = Library:Create("Frame", {
+        local TabFrame = Library:Create(SupportsCanvasGroup and "CanvasGroup" or "Frame", {
             Name = "TabFrame",
             BackgroundTransparency = 1;
+            BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 0, 0);
             Size = UDim2.new(1, 0, 1, 0);
             Visible = false;
             ZIndex = 2;
             Parent = TabContainer;
         })
+
+        -- Tab switch: the incoming page lifts into place and fades in.
+        local TabSwitchTween = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        local function PlayTabSwitch()
+            TabFrame.Position = UDim2.new(0, 0, 0, 8)
+            if SupportsCanvasGroup then
+                TabFrame.GroupTransparency = 1
+                TweenService:Create(TabFrame, TabSwitchTween, {
+                    Position = UDim2.new(0, 0, 0, 0);
+                    GroupTransparency = 0;
+                }):Play()
+            else
+                TweenService:Create(TabFrame, TabSwitchTween, {
+                    Position = UDim2.new(0, 0, 0, 0);
+                }):Play()
+            end
+        end
 
         local TopBarLabelStroke
         local TopBarHighlight
@@ -8864,6 +8889,7 @@ end
             TabFrame.Visible = true
 
             Tab:Resize()
+            PlayTabSwitch()
         end
         Tab.Show = Tab.ShowTab
 
@@ -9056,7 +9082,48 @@ end
             Groupbox.Header = Header
             Groupbox.Label = GroupboxLabel
 
-            function Groupbox:Resize()
+            --// Collapsing \--
+            -- Opt-in per groupbox. The header turns into a click target and
+            -- grows an arrow on the right; the body is clipped away on a tween.
+            local Collapsible = Info.Collapsible == true
+            Groupbox.Collapsible = Collapsible
+            Groupbox.Collapsed = Collapsible and Info.Collapsed == true
+
+            local CollapseArrow
+            if Collapsible then
+                BoxOuter.ClipsDescendants = true
+                GroupboxLabel.Size = UDim2.new(1, -35, 1, 0)
+
+                CollapseArrow = Library:Create("ImageLabel", {
+                    AnchorPoint = Vector2.new(1, 0.5);
+                    BackgroundTransparency = 1;
+                    Position = UDim2.new(1, -8, 0.5, 0);
+                    Size = UDim2.fromOffset(12, 12);
+                    Image = CustomImageManager.GetAsset("DropdownArrow");
+                    ImageColor3 = Library.FontColor;
+                    Rotation = Groupbox.Collapsed and -90 or 0;
+                    ZIndex = 7;
+                    Parent = Header;
+                })
+                Library:AddToRegistry(CollapseArrow, { ImageColor3 = "FontColor"; })
+
+                local ClickTarget = Library:Create("TextButton", {
+                    BackgroundTransparency = 1;
+                    Size = UDim2.new(1, 0, 1, 0);
+                    Text = "";
+                    AutoButtonColor = false;
+                    ZIndex = 8;
+                    Parent = Header;
+                })
+
+                ClickTarget.MouseButton1Click:Connect(function()
+                    Groupbox:SetCollapsed(not Groupbox.Collapsed, true)
+                end)
+            end
+
+            local CollapseTween = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+
+            function Groupbox:Resize(Animate)
                 local Size = 0
 
                 for _, Element in next, Groupbox.Container:GetChildren() do
@@ -9065,7 +9132,34 @@ end
                     end
                 end
 
-                BoxOuter.Size = UDim2.new(1, 0, 0, ((GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING) * DPIScale + Size) + (GROUPBOX_PADDING * DPIScale))
+                local Full = UDim2.new(1, 0, 0, ((GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING) * DPIScale + Size) + (GROUPBOX_PADDING * DPIScale))
+                local Goal = Groupbox.Collapsed and UDim2.new(1, 0, 0, GROUPBOX_HEADER_HEIGHT * DPIScale) or Full
+
+                if Animate then
+                    TweenService:Create(BoxOuter, CollapseTween, { Size = Goal }):Play()
+                else
+                    BoxOuter.Size = Goal
+                end
+            end
+
+            -- Collapsed boxes keep their elements parented (so state, configs and
+            -- search all keep working); only the box height changes.
+            function Groupbox:SetCollapsed(Collapsed, Animate)
+                if not Groupbox.Collapsible then return end
+
+                Groupbox.Collapsed = not not Collapsed
+
+                if CollapseArrow then
+                    TweenService:Create(CollapseArrow, CollapseTween, {
+                        Rotation = Groupbox.Collapsed and -90 or 0;
+                    }):Play()
+                end
+
+                Groupbox:Resize(Animate)
+            end
+
+            function Groupbox:ToggleCollapsed(Animate)
+                Groupbox:SetCollapsed(not Groupbox.Collapsed, Animate ~= false)
             end
 
             Groupbox.Container = Container
@@ -9079,12 +9173,21 @@ end
             return Groupbox
         end
 
-        function Tab:AddLeftGroupbox(Name)
-            return Tab:AddGroupbox({ Side = 1; Name = Name; })
+        -- Tab:AddLeftGroupbox("Name") or Tab:AddLeftGroupbox("Name", true) for a
+        -- collapsible box; the table form also takes Collapsed = true to start
+        -- it closed.
+        function Tab:AddLeftGroupbox(Name, Collapsible)
+            if typeof(Name) == "table" then
+                return Tab:AddGroupbox({ Side = 1; Name = Name.Name; Collapsible = Name.Collapsible; Collapsed = Name.Collapsed; })
+            end
+            return Tab:AddGroupbox({ Side = 1; Name = Name; Collapsible = Collapsible; })
         end
 
-        function Tab:AddRightGroupbox(Name)
-            return Tab:AddGroupbox({ Side = 2; Name = Name; })
+        function Tab:AddRightGroupbox(Name, Collapsible)
+            if typeof(Name) == "table" then
+                return Tab:AddGroupbox({ Side = 2; Name = Name.Name; Collapsible = Name.Collapsible; Collapsed = Name.Collapsed; })
+            end
+            return Tab:AddGroupbox({ Side = 2; Name = Name; Collapsible = Collapsible; })
         end
 
         function Tab:AddTabbox(Info)
