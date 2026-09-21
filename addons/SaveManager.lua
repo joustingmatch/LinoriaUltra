@@ -429,6 +429,41 @@ local SaveManager = {} do
         return true, ""
     end
 
+    --// Clipboard \\--
+    -- Resolves the on-disk path of a saved config, honouring the sub-folder.
+    function SaveManager:GetConfigPath(name)
+        SaveManager:CheckFolderTree()
+
+        if SaveManager:CheckSubFolder(true) then
+            return self.Folder .. "/settings/" .. self.SubFolder .. "/" .. name .. ".json"
+        end
+
+        return self.Folder .. "/settings/" .. name .. ".json"
+    end
+
+    -- Copies a saved config's raw JSON to the clipboard so it can be shared.
+    function SaveManager:ConfigToClipboard(name)
+        if (not name) then
+            return false, "no config file is selected"
+        end
+
+        local clipboard = setclipboard or toclipboard or (syn and syn.write_clipboard)
+        if typeof(clipboard) ~= "function" then
+            return false, "executor has no clipboard function"
+        end
+
+        local file = SaveManager:GetConfigPath(name)
+        if not isfile(file) then return false, "invalid file" end
+
+        local success, contents = pcall(readfile, file)
+        if not success then return false, "read file error" end
+
+        local written = pcall(clipboard, contents)
+        if not written then return false, "clipboard error" end
+
+        return true
+    end
+
     --// GUI \\--
     function SaveManager:BuildConfigSection(tab)
         assert(self.Library, 'SaveManager:BuildConfigSection -> Must set SaveManager.Library')
@@ -436,7 +471,11 @@ local SaveManager = {} do
         local section = tab:AddRightGroupbox('Configuration')
 
         section:AddInput('SaveManager_ConfigName',    { Text = 'Config name' })
-        section:AddButton('Create config', function()
+        section:AddDropdown('SaveManager_ConfigList', { Text = 'Config list', Values = self:RefreshConfigList(), AllowNull = true })
+
+        -- Buttons are paired, so the section reads as four rows rather than a
+        -- single tall column.
+        local CreateButton = section:AddButton('Create config', function()
             local name = self.Library.Options.SaveManager_ConfigName.Value
 
             if name:gsub(' ', '') == '' then
@@ -456,10 +495,7 @@ local SaveManager = {} do
             self.Library.Options.SaveManager_ConfigList:SetValue(nil)
         end)
 
-        section:AddDivider()
-
-        section:AddDropdown('SaveManager_ConfigList', { Text = 'Config list', Values = self:RefreshConfigList(), AllowNull = true })
-        section:AddButton('Load config', function()
+        CreateButton:AddButton('Load config', function()
             local name = self.Library.Options.SaveManager_ConfigList.Value
 
             local success, err = self:Load(name)
@@ -470,7 +506,20 @@ local SaveManager = {} do
 
             self.Library:Notify(string.format('Loaded config %q', name))
         end)
-        section:AddButton('Overwrite config', function()
+
+        -- Same load, no notification: for configs applied on join or on a
+        -- keybind, where the toast would just be noise.
+        local SilentButton = section:AddButton('Silent load', function()
+            local name = self.Library.Options.SaveManager_ConfigList.Value
+
+            -- Only failures speak up; a successful silent load stays quiet.
+            local success, err = self:Load(name)
+            if not success then
+                self.Library:Notify('Failed to load config: ' .. err)
+            end
+        end)
+
+        SilentButton:AddButton('Overwrite config', function()
             local name = self.Library.Options.SaveManager_ConfigList.Value
 
             local success, err = self:Save(name)
@@ -482,7 +531,7 @@ local SaveManager = {} do
             self.Library:Notify(string.format('Overwrote config %q', name))
         end)
 
-        section:AddButton('Delete config', function()
+        local DeleteButton = section:AddButton('Delete config', function()
             local name = self.Library.Options.SaveManager_ConfigList.Value
 
             local success, err = self:Delete(name)
@@ -496,12 +545,12 @@ local SaveManager = {} do
             self.Library.Options.SaveManager_ConfigList:SetValue(nil)
         end)
 
-        section:AddButton('Refresh list', function()
+        DeleteButton:AddButton('Refresh list', function()
             self.Library.Options.SaveManager_ConfigList:SetValues(self:RefreshConfigList())
             self.Library.Options.SaveManager_ConfigList:SetValue(nil)
         end)
 
-        section:AddButton('Set as autoload', function()
+        local AutoloadButton = section:AddButton('Set as autoload', function()
             local name = self.Library.Options.SaveManager_ConfigList.Value
 
             local success, err = self:SaveAutoloadConfig(name)
@@ -513,7 +562,8 @@ local SaveManager = {} do
             self.Library:Notify(string.format('Set %q to auto load', name))
             self.AutoloadConfigLabel:SetText('Current autoload config: ' .. name)
         end)
-        section:AddButton('Reset autoload', function()
+
+        AutoloadButton:AddButton('Remove autoload', function()
             local success, err = self:DeleteAutoLoadConfig()
             if not success then
                 self.Library:Notify('Failed to set autoload config: ' .. err)
@@ -525,6 +575,18 @@ local SaveManager = {} do
         end)
 
         self.AutoloadConfigLabel = section:AddLabel("Current autoload config: " .. self:GetAutoloadConfig(), true)
+
+        section:AddButton('Config to Clipboard', function()
+            local name = self.Library.Options.SaveManager_ConfigList.Value
+
+            local success, err = self:ConfigToClipboard(name)
+            if not success then
+                self.Library:Notify('Failed to copy config: ' .. err)
+                return
+            end
+
+            self.Library:Notify(string.format('Copied config %q to clipboard', name))
+        end)
 
         -- self:LoadAutoloadConfig()
         self:SetIgnoreIndexes({ 'SaveManager_ConfigList', 'SaveManager_ConfigName' })
