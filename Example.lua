@@ -61,6 +61,8 @@ local Window = Library:CreateWindow({
 -- You do not have to set your tabs & groups up this way, just a prefrence.
 local Tabs = {
 	-- Creates a new tab titled Main
+	-- A tab can also carry an icon: Window:AddTab("Main", "house")
+	-- or the table form: Window:AddTab({ Name = "Main", Icon = "house" })
 	Main = Window:AddTab("Main"),
 	["UI Settings"] = Window:AddTab("UI Settings"),
 }
@@ -735,12 +737,22 @@ Window:AddInterfaceGroupbox(Tabs["UI Settings"])
 -- NOTE: you can also call ThemeManager:ApplyToGroupbox to add it to a specific groupbox
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 
--- Optional: customise the side-bar footer (logo + title + subtitle).
+-- Optional: customise the side-bar footer (icon + title + subtitle).
+-- Every field is optional; pass "" to clear a line, false to drop the icon.
 Window:SetFooter({
 	Title = "Zeke Hub",
 	Subtitle = "[UP] Just a Skid",
-	Logo = "rbxassetid://0", -- replace with your own asset id / url / lucide icon name
+	Icon = "rbxassetid://0", -- asset id / url / lucide icon name
+	-- IconColor = Color3.fromRGB(0, 170, 255),
+	-- TitleColor = Color3.fromRGB(255, 255, 255), -- `false` puts it back on the accent
+	-- SubtitleColor = false,                      -- `false` puts it back on the font colour
+	-- Visible = true,
 })
+
+-- Single-field helpers, handy for live updates (e.g. an FPS or user line):
+-- Window:SetFooterTitle("Zeke Hub")
+-- Window:SetFooterSubtitle("v1.2.0")
+-- Window:SetFooterIcon("user")
 
 -- You can use the SaveManager:LoadAutoloadConfig() to load a config
 -- which has been marked to be one that auto loads!

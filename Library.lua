@@ -225,6 +225,11 @@ do
 end
 
 local DPIScale = 1;
+
+-- Groupbox / tabbox header geometry (shared so both stay in sync).
+local GROUPBOX_HEADER_HEIGHT = 26;
+local GROUPBOX_PADDING = 6;
+
 local Library = {
     Registry = {};
     RegistryMap = {};
@@ -1227,8 +1232,10 @@ local Templates = { -- TO-DO: do it for missing elements.
         MenuLayout = "Top", -- "Top" or "Side"
         SidebarWidth = 118,
         Logo = "",
+        FooterIcon = "",
         FooterTitle = "",
         FooterSubtitle = "",
+        FooterVisible = true,
     },
 
     --// Elements \\--
@@ -6294,8 +6301,7 @@ do
 
         local BoxOuter = Library:Create("Frame", {
             BackgroundColor3 = Library.BackgroundColor;
-            BorderColor3 = Library.OutlineColor;
-            BorderMode = Enum.BorderMode.Inset;
+            BorderSizePixel = 0;
             Size = UDim2.new(1, 0, 0, 507 + 2);
             ZIndex = 2;
             Parent = ParentGroupbox.Side == 1 and Tab.LeftSideFrame or Tab.RightSideFrame;
@@ -6303,39 +6309,36 @@ do
 
         Library:AddToRegistry(BoxOuter, {
             BackgroundColor3 = "BackgroundColor";
-            BorderColor3 = "OutlineColor";
+        })
+
+        Library:Create("UICorner", {
+            CornerRadius = Library.CornerRadius;
+            Parent = BoxOuter;
+        })
+
+        local BoxStroke = Library:Create("UIStroke", {
+            Color = Library.OutlineColor;
+            Thickness = 1;
+            Parent = BoxOuter;
+        })
+
+        Library:AddToRegistry(BoxStroke, {
+            Color = "OutlineColor";
         })
 
         local BoxInner = Library:Create("Frame", {
-            BackgroundColor3 = Library.BackgroundColor;
-            BorderColor3 = Color3.new(0, 0, 0);
-            -- BorderMode = Enum.BorderMode.Inset;
-            Size = UDim2.new(1, -2, 1, -2);
-            Position = UDim2.new(0, 1, 0, 1);
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 4;
             Parent = BoxOuter;
         })
 
-        Library:AddToRegistry(BoxInner, {
-            BackgroundColor3 = "BackgroundColor";
-        })
-
-        local Highlight = Library:Create("Frame", {
-            BackgroundColor3 = Library.AccentColor;
-            BorderSizePixel = 0;
-            Size = UDim2.new(1, 0, 0, 2);
-            ZIndex = 5;
-            Parent = BoxInner;
-        })
-
-        Library:AddToRegistry(Highlight, {
-            BackgroundColor3 = "AccentColor";
-        })
-
+        -- Titleless box, so it only carries the body padding a groupbox uses.
         local Container = Library:Create("Frame", {
             BackgroundTransparency = 1;
-            Position = UDim2.new(0, 4, 0, 10);
-            Size = UDim2.new(1, -4, 1, -10);
+            Position = UDim2.new(0, 6, 0, GROUPBOX_PADDING);
+            Size = UDim2.new(1, -12, 1, -GROUPBOX_PADDING);
             ZIndex = 1;
             Parent = BoxInner;
         })
@@ -6355,7 +6358,7 @@ do
                 end
             end
 
-            BoxOuter.Size = UDim2.new(1, 0, 0, (10 * DPIScale + Size) + 2 + 2)
+            BoxOuter.Size = UDim2.new(1, 0, 0, (GROUPBOX_PADDING * DPIScale + Size) + (GROUPBOX_PADDING * DPIScale))
         end
 
         function DepGroupbox:Update()
@@ -7553,7 +7556,7 @@ function Library:CreateWindow(...)
     -- left of the window; the tab strip (TabArea) is re-shaped into a vertical
     -- column between the header and the footer, and TabContainer is pushed right.
     local SidebarWidth = math.clamp(WindowInfo.SidebarWidth or 118, 70, 260)
-    local FooterHeight = 66
+    local FooterHeight = 52
 
     -- List of { Object, Property, Shown } entries faded in/out with the layout.
     local SidebarElements = {}
@@ -7561,41 +7564,65 @@ function Library:CreateWindow(...)
         table.insert(SidebarElements, { Object = Object, Property = Property, Shown = Shown })
     end
 
+    --// Side-bar footer \--
+    -- Transparent strip pinned to the bottom of the side-bar, split off from the
+    -- tab column by a hairline divider. Holds an optional icon plus two lines of
+    -- caller-supplied text; everything is settable through Window:SetFooter.
     local Footer = Library:Create("Frame", {
-        BackgroundColor3 = Library.BackgroundColor;
-        BorderColor3 = Color3.new(0, 0, 0);
-        BorderMode = Enum.BorderMode.Inset;
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
         Position = UDim2.new(0, 8, 1, -(FooterHeight + 4));
         Size = UDim2.new(0, SidebarWidth, 0, FooterHeight);
-        BackgroundTransparency = 1;
         ZIndex = 3;
         Visible = false;
         Parent = MainSectionInner;
     })
-    Library:AddToRegistry(Footer, { BackgroundColor3 = "BackgroundColor"; })
-    TrackSidebar(Footer, "BackgroundTransparency", 0)
 
-    local FooterLogo = Library:Create("ImageLabel", {
-        AnchorPoint = Vector2.new(0.5, 0);
-        BackgroundTransparency = 1;
+    -- Divider above the footer, fading out towards both edges.
+    local FooterDivider = Library:Create("Frame", {
+        BackgroundColor3 = Library.OutlineColor;
         BorderSizePixel = 0;
-        Position = UDim2.new(0.5, 0, 0, 6);
-        Size = UDim2.fromOffset(26, 26);
-        Image = "";
-        ImageTransparency = 1;
-        ScaleType = Enum.ScaleType.Fit;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(1, 0, 0, 1);
         ZIndex = 4;
         Parent = Footer;
     })
+    Library:AddToRegistry(FooterDivider, { BackgroundColor3 = "OutlineColor"; })
+    Library:Create("UIGradient", {
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        });
+        Parent = FooterDivider;
+    })
+    TrackSidebar(FooterDivider, "BackgroundTransparency", 0)
+
+    local FooterLogo = Library:Create("ImageLabel", {
+        AnchorPoint = Vector2.new(0, 0.5);
+        BackgroundTransparency = 1;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 2, 0.5, 1);
+        Size = UDim2.fromOffset(24, 24);
+        Image = "";
+        ImageColor3 = Library.AccentColor;
+        ImageTransparency = 1;
+        ScaleType = Enum.ScaleType.Fit;
+        Visible = false;
+        ZIndex = 4;
+        Parent = Footer;
+    })
+    Library:AddToRegistry(FooterLogo, { ImageColor3 = "AccentColor"; })
     TrackSidebar(FooterLogo, "ImageTransparency", 0)
 
     local FooterTitle = Library:CreateLabel({
-        AnchorPoint = Vector2.new(0.5, 0);
-        Position = UDim2.new(0.5, 0, 0, 34);
-        Size = UDim2.new(1, -8, 0, 14);
+        Position = UDim2.new(0, 2, 0, 12);
+        Size = UDim2.new(1, -4, 0, 16);
         Text = "";
         TextSize = 14;
         TextColor3 = Library.AccentColor;
+        TextTruncate = Enum.TextTruncate.AtEnd;
+        TextXAlignment = Enum.TextXAlignment.Left;
         TextTransparency = 1;
         ZIndex = 4;
         Parent = Footer;
@@ -7606,17 +7633,17 @@ function Library:CreateWindow(...)
     TrackSidebar(FooterTitle, "TextTransparency", 0)
 
     local FooterSubtitle = Library:CreateLabel({
-        AnchorPoint = Vector2.new(0.5, 0);
-        Position = UDim2.new(0.5, 0, 0, 48);
-        Size = UDim2.new(1, -8, 0, 12);
+        Position = UDim2.new(0, 2, 0, 28);
+        Size = UDim2.new(1, -4, 0, 14);
         Text = "";
         TextSize = 12;
         TextTruncate = Enum.TextTruncate.AtEnd;
+        TextXAlignment = Enum.TextXAlignment.Left;
         TextTransparency = 1;
         ZIndex = 4;
         Parent = Footer;
     })
-    TrackSidebar(FooterSubtitle, "TextTransparency", 0.4)
+    TrackSidebar(FooterSubtitle, "TextTransparency", 0.35)
 
     -- Collapse toggle: an icon-only chevron in the window header, to the left of
     -- the title. Hides the tab column / footer and widens the content pane.
@@ -7645,25 +7672,95 @@ function Library:CreateWindow(...)
     Window.MenuLayout = (WindowInfo.MenuLayout == "Side") and "Side" or "Top"
     Window.SidebarCollapsed = false
 
+    -- Re-flows the footer for whatever it currently holds: icon or no icon,
+    -- one line of text or two.
+    local function LayoutFooter()
+        local HasIcon = FooterLogo.Image ~= ""
+        local HasSubtitle = FooterSubtitle.Text ~= ""
+        local TextX = HasIcon and 32 or 2
+        local Width = UDim2.new(1, -(TextX + 2), 0, 0)
+
+        FooterLogo.Visible = HasIcon
+        FooterSubtitle.Visible = HasSubtitle
+
+        FooterTitle.Position = UDim2.new(0, TextX, 0, HasSubtitle and 12 or 19)
+        FooterTitle.Size = Width + UDim2.fromOffset(0, 16)
+
+        FooterSubtitle.Position = UDim2.new(0, TextX, 0, 29)
+        FooterSubtitle.Size = Width + UDim2.fromOffset(0, 14)
+    end
+
+    -- Everything on the footer is caller-controlled. Accepted keys:
+    --   Title / Subtitle    : strings ("" clears the line)
+    --   Icon (alias: Logo)  : icon name or asset id; "" / false removes it
+    --   IconColor           : Color3 tint for the icon (defaults to the accent)
+    --   TitleColor          : Color3, or nil to track the theme accent
+    --   SubtitleColor       : Color3, or nil to track the theme font colour
+    --   Visible             : boolean, hides the whole footer
     function Window:SetFooter(Info)
         Info = Info or {}
+
         if typeof(Info.Title) == "string" then FooterTitle.Text = Info.Title end
         if typeof(Info.Subtitle) == "string" then FooterSubtitle.Text = Info.Subtitle end
-        if Info.Logo ~= nil then
-            local Icon = Library:GetCustomIcon(tostring(Info.Logo))
-            if Icon then
-                FooterLogo.Image = Icon.Url
-                FooterLogo.ImageRectOffset = Icon.ImageRectOffset
-                FooterLogo.ImageRectSize = Icon.ImageRectSize
-            else
+
+        local IconValue = Info.Icon
+        if IconValue == nil then IconValue = Info.Logo end
+        if IconValue ~= nil then
+            if IconValue == false or IconValue == "" then
                 FooterLogo.Image = ""
+            else
+                local Icon = Library:GetCustomIcon(tostring(IconValue))
+                if Icon then
+                    FooterLogo.Image = Icon.Url
+                    FooterLogo.ImageRectOffset = Icon.ImageRectOffset
+                    FooterLogo.ImageRectSize = Icon.ImageRectSize
+                else
+                    FooterLogo.Image = ""
+                end
             end
         end
+
+        if typeof(Info.IconColor) == "Color3" then
+            Library.RegistryMap[FooterLogo].Properties.ImageColor3 = nil
+            FooterLogo.ImageColor3 = Info.IconColor
+        elseif Info.IconColor == false then
+            Library.RegistryMap[FooterLogo].Properties.ImageColor3 = "AccentColor"
+            FooterLogo.ImageColor3 = Library.AccentColor
+        end
+
+        if typeof(Info.TitleColor) == "Color3" then
+            Library.RegistryMap[FooterTitle].Properties.TextColor3 = nil
+            FooterTitle.TextColor3 = Info.TitleColor
+        elseif Info.TitleColor == false then
+            Library.RegistryMap[FooterTitle].Properties.TextColor3 = "AccentColor"
+            FooterTitle.TextColor3 = Library.AccentColor
+        end
+
+        if typeof(Info.SubtitleColor) == "Color3" then
+            Library.RegistryMap[FooterSubtitle].Properties.TextColor3 = nil
+            FooterSubtitle.TextColor3 = Info.SubtitleColor
+        elseif Info.SubtitleColor == false then
+            Library.RegistryMap[FooterSubtitle].Properties.TextColor3 = "FontColor"
+            FooterSubtitle.TextColor3 = Library.FontColor
+        end
+
+        if typeof(Info.Visible) == "boolean" then
+            Window.FooterEnabled = Info.Visible
+            if Window.ApplySidebar then Window.ApplySidebar(false) end
+        end
+
+        LayoutFooter()
     end
+
+    function Window:SetFooterTitle(Title) Window:SetFooter({ Title = Title }) end
+    function Window:SetFooterSubtitle(Subtitle) Window:SetFooter({ Subtitle = Subtitle }) end
+    function Window:SetFooterIcon(Icon) Window:SetFooter({ Icon = Icon }) end
+
+    Window.FooterEnabled = WindowInfo.FooterVisible ~= false
     Window:SetFooter({
         Title = (WindowInfo.FooterTitle ~= "" and WindowInfo.FooterTitle) or Window.Title,
         Subtitle = WindowInfo.FooterSubtitle,
-        Logo = (WindowInfo.Logo ~= "" and WindowInfo.Logo) or nil,
+        Icon = ((WindowInfo.FooterIcon ~= "" and WindowInfo.FooterIcon) or (WindowInfo.Logo ~= "" and WindowInfo.Logo)) or nil,
     })
 
     -- Applies all side-bar geometry/visibility for the current MenuLayout and
@@ -7683,7 +7780,7 @@ function Library:CreateWindow(...)
         if IsSide then
             AreaGoal = {
                 Position = UDim2.new(0, 8, 0, 8);
-                Size = UDim2.new(0, SidebarWidth, 1, -(8 + FooterHeight + 14));
+                Size = UDim2.new(0, SidebarWidth, 1, -(8 + (Window.FooterEnabled and (FooterHeight + 14) or 12)));
             }
             if Collapsed then
                 -- Sidebar is gone entirely; content spans the full window.
@@ -7732,7 +7829,7 @@ function Library:CreateWindow(...)
         -- The tab column hides while collapsed; the footer shows only when the
         -- side-bar is expanded. Toggle Visible (not just transparency) so label
         -- text strokes don't leak through in Top / collapsed states.
-        local ShowFooter = IsSide and not Collapsed
+        local ShowFooter = IsSide and not Collapsed and Window.FooterEnabled
         TabArea.Visible = (not IsSide) or (not Collapsed)
 
         Window.LayoutToken = (Window.LayoutToken or 0) + 1
@@ -7752,12 +7849,14 @@ function Library:CreateWindow(...)
 
         if not ShowFooter then
             task.delay(Animate and 0.28 or 0, function()
-                if Window.LayoutToken == Token and not (Window.MenuLayout == "Side" and not Window.SidebarCollapsed) then
+                if Window.LayoutToken == Token and not (Window.MenuLayout == "Side" and not Window.SidebarCollapsed and Window.FooterEnabled) then
                     Footer.Visible = false
                 end
             end)
         end
     end
+
+    Window.ApplySidebar = ApplySidebar
 
     function Window:SetMenuLayout(Layout, Animate)
         Window.MenuLayout = (Layout == "Side") and "Side" or "Top"
@@ -8294,7 +8393,14 @@ function Library:CreateWindow(...)
         return Dialog
     end
 
-    function Window:AddTab(Name)
+    -- Window:AddTab("Name") or Window:AddTab("Name", "icon") or
+    -- Window:AddTab({ Name = "Name", Icon = "icon" })
+    function Window:AddTab(Name, Icon)
+        if typeof(Name) == "table" then
+            Icon = Name.Icon or Name.Image
+            Name = Name.Name or Name.Title or ""
+        end
+
         local Tab = {
             Groupboxes = {};
             Tabboxes = {};
@@ -8317,7 +8423,7 @@ function Library:CreateWindow(...)
 
         local TabButton = Library:Create("Frame", {
             BackgroundColor3 = Library.BackgroundColor;
-            BorderColor3 = Library.OutlineColor;
+            BorderSizePixel = 0;
             Size = UDim2.new(0, TabButtonWidth + 8 + 4, 0.85, 0);
             ZIndex = 1;
             Parent = TabArea;
@@ -8325,8 +8431,28 @@ function Library:CreateWindow(...)
 
         Library:AddToRegistry(TabButton, {
             BackgroundColor3 = "BackgroundColor";
-            BorderColor3 = "OutlineColor";
         })
+
+        Library:Create("UICorner", {
+            CornerRadius = Library.CornerRadius;
+            Parent = TabButton;
+        })
+
+        -- Optional per-tab icon, drawn to the left of the label.
+        local TabIcon = Library:Create("ImageLabel", {
+            AnchorPoint = Vector2.new(0, 0.5);
+            BackgroundTransparency = 1;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 8, 0.5, 0);
+            Size = UDim2.fromOffset(14, 14);
+            Image = "";
+            ImageColor3 = Library.FontColor;
+            ScaleType = Enum.ScaleType.Fit;
+            Visible = false;
+            ZIndex = 3;
+            Parent = TabButton;
+        })
+        Library:AddToRegistry(TabIcon, { ImageColor3 = "FontColor"; })
 
         -- Hover glow (inactive tabs lighten on mouseover).
         local TabHover = Library:Create("Frame", {
@@ -8338,6 +8464,10 @@ function Library:CreateWindow(...)
             Parent = TabButton;
         })
         Library:AddToRegistry(TabHover, { BackgroundColor3 = "AccentColor"; })
+        Library:Create("UICorner", {
+            CornerRadius = Library.CornerRadius;
+            Parent = TabHover;
+        })
 
         local TabButtonLabel = Library:CreateLabel({
             Position = UDim2.new(0, 0, 0, 0);
@@ -8365,13 +8495,15 @@ function Library:CreateWindow(...)
         local SelectionHighlight = Library:Create("Frame", {
             BackgroundColor3 = Library.AccentColor;
             BorderSizePixel = 0;
-            Position = UDim2.new(0, 0, 0, 0);
-            Size = UDim2.new(0, 2, 1, 0);
+            AnchorPoint = Vector2.new(0, 0.5);
+            Position = UDim2.new(0, 0, 0.5, 0);
+            Size = UDim2.new(0, 3, 0.6, 0);
             Visible = false;
             ZIndex = 4;
             Parent = TabButton;
         })
         Library:AddToRegistry(SelectionHighlight, { BackgroundColor3 = "AccentColor"; })
+        Library:Create("UICorner", { CornerRadius = UDim.new(0, 2); Parent = SelectionHighlight; })
 
         -- Accent underline shown beneath the active tab while in Top layout.
         local TopIndicator = Library:Create("Frame", {
@@ -8422,6 +8554,13 @@ function Library:CreateWindow(...)
             local TargetColor = Active and Library.MainColor or Library.BackgroundColor
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = TargetName
             TweenService:Create(TabButton, VisualTween, { BackgroundColor3 = TargetColor }):Play()
+
+            -- The active tab's icon picks up the accent colour.
+            local IconName = Active and "AccentColor" or "FontColor"
+            Library.RegistryMap[TabIcon].Properties.ImageColor3 = IconName
+            TweenService:Create(TabIcon, VisualTween, {
+                ImageColor3 = Active and Library.AccentColor or Library.FontColor;
+            }):Play()
         end
         Tab.UpdateSelectedVisual = UpdateSelectedVisual
 
@@ -8440,16 +8579,21 @@ function Library:CreateWindow(...)
             local IsSide = Layout == "Side"
             local Info = TweenInfo.new(Animate and 0.28 or 0, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
+            local HasIcon = TabIcon.Image ~= ""
+            TabIcon.Visible = HasIcon
+
             if IsSide then
-                TweenService:Create(TabButton, Info, { Size = UDim2.new(1, 0, 0, 26) }):Play()
+                TweenService:Create(TabButton, Info, { Size = UDim2.new(1, 0, 0, 28) }):Play()
+                TabIcon.Position = UDim2.new(0, 10, 0.5, 0)
                 TabButtonLabel.TextXAlignment = Enum.TextXAlignment.Left
-                TabButtonLabel.Position = UDim2.new(0, 10, 0, 0)
-                TabButtonLabel.Size = UDim2.new(1, -12, 1, -1)
+                TabButtonLabel.Position = UDim2.new(0, HasIcon and 30 or 12, 0, 0)
+                TabButtonLabel.Size = UDim2.new(1, -(HasIcon and 34 or 16), 1, -1)
             else
                 TweenService:Create(TabButton, Info, { Size = UDim2.new(0, Tab.ButtonWidth + 8 + 4, 0.85, 0) }):Play()
-                TabButtonLabel.TextXAlignment = Enum.TextXAlignment.Center
-                TabButtonLabel.Position = UDim2.new(0, 0, 0, 0)
-                TabButtonLabel.Size = UDim2.new(1, 0, 1, -1)
+                TabIcon.Position = UDim2.new(0, 8, 0.5, 0)
+                TabButtonLabel.TextXAlignment = HasIcon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
+                TabButtonLabel.Position = UDim2.new(0, HasIcon and 26 or 0, 0, 0)
+                TabButtonLabel.Size = UDim2.new(1, HasIcon and -30 or 0, 1, -1)
             end
 
             UpdateSelectedVisual()
@@ -8743,6 +8887,7 @@ end
                 Tab.Name = Name
 
                 local TabButtonWidth = Library:GetTextBounds(Tab.Name, Library.Font, 16)
+                    + (TabIcon.Image ~= "" and 22 or 0)
 
                 Tab.ButtonWidth = TabButtonWidth
                 if Window.MenuLayout ~= "Side" then
@@ -8750,6 +8895,27 @@ end
                 end
                 TabButtonLabel.Text = Tab.Name
             end
+        end
+
+        -- Accepts an icon name (lucide et al. via the icon module) or an asset
+        -- id; `nil`, `false` or "" removes it again.
+        function Tab:SetIcon(Icon)
+            if Icon == nil or Icon == false or Icon == "" then
+                TabIcon.Image = ""
+            else
+                local Resolved = Library:GetCustomIcon(tostring(Icon))
+                if Resolved then
+                    TabIcon.Image = Resolved.Url
+                    TabIcon.ImageRectOffset = Resolved.ImageRectOffset
+                    TabIcon.ImageRectSize = Resolved.ImageRectSize
+                else
+                    TabIcon.Image = ""
+                end
+            end
+
+            Tab.Icon = Icon
+            Tab:SetName(Tab.Name)
+            ApplyTabLayout(Window.MenuLayout, false)
         end
 
         function Tab:AddGroupbox(Info)
@@ -8763,8 +8929,7 @@ end
 
             local BoxOuter = Library:Create("Frame", {
                 BackgroundColor3 = Library.BackgroundColor;
-                BorderColor3 = Library.OutlineColor;
-                BorderMode = Enum.BorderMode.Inset;
+                BorderSizePixel = 0;
                 Size = UDim2.new(1, 0, 0, 507 + 2);
                 ZIndex = 2;
                 Parent = Info.Side == 1 and LeftSide or RightSide;
@@ -8772,50 +8937,111 @@ end
 
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = "BackgroundColor";
-                BorderColor3 = "OutlineColor";
+            })
+
+            Library:Create("UICorner", {
+                CornerRadius = Library.CornerRadius;
+                Parent = BoxOuter;
+            })
+
+            local BoxStroke = Library:Create("UIStroke", {
+                Color = Library.OutlineColor;
+                Thickness = 1;
+                Parent = BoxOuter;
+            })
+
+            Library:AddToRegistry(BoxStroke, {
+                Color = "OutlineColor";
             })
 
             local BoxInner = Library:Create("Frame", {
-                BackgroundColor3 = Library.BackgroundColor;
-                BorderColor3 = Color3.new(0, 0, 0);
-                -- BorderMode = Enum.BorderMode.Inset;
-                Size = UDim2.new(1, -2, 1, -2);
-                Position = UDim2.new(0, 1, 0, 1);
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                Size = UDim2.new(1, 0, 1, 0);
                 ZIndex = 4;
                 Parent = BoxOuter;
             })
 
-            Library:AddToRegistry(BoxInner, {
-                BackgroundColor3 = "BackgroundColor";
-            })
-
-            local Highlight = Library:Create("Frame", {
-                BackgroundColor3 = Library.AccentColor;
+            --// Header \--
+            -- Title sits in its own shaded strip, split off from the body by a divider.
+            local Header = Library:Create("Frame", {
+                BackgroundColor3 = Library.MainColor;
                 BorderSizePixel = 0;
-                Size = UDim2.new(1, 0, 0, 2);
+                Size = UDim2.new(1, 0, 0, GROUPBOX_HEADER_HEIGHT);
                 ZIndex = 5;
                 Parent = BoxInner;
             })
 
-            Library:AddToRegistry(Highlight, {
+            Library:AddToRegistry(Header, {
+                BackgroundColor3 = "MainColor";
+            })
+
+            Library:Create("UICorner", {
+                CornerRadius = Library.CornerRadius;
+                Parent = Header;
+            })
+
+            -- Squares off the header's bottom corners so it meets the body flush.
+            local HeaderFill = Library:Create("Frame", {
+                AnchorPoint = Vector2.new(0, 1);
+                BackgroundColor3 = Library.MainColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 1, 0);
+                Size = UDim2.new(1, 0, 0, 6);
+                ZIndex = 5;
+                Parent = Header;
+            })
+
+            Library:AddToRegistry(HeaderFill, {
+                BackgroundColor3 = "MainColor";
+            })
+
+            local HeaderDivider = Library:Create("Frame", {
+                AnchorPoint = Vector2.new(0, 1);
+                BackgroundColor3 = Library.OutlineColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 1, 0);
+                Size = UDim2.new(1, 0, 0, 1);
+                ZIndex = 6;
+                Parent = Header;
+            })
+
+            Library:AddToRegistry(HeaderDivider, {
+                BackgroundColor3 = "OutlineColor";
+            })
+
+            -- Small accent mark to the left of the title.
+            local HeaderMark = Library:Create("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5);
+                BackgroundColor3 = Library.AccentColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 7, 0.5, 0);
+                Size = UDim2.fromOffset(3, 12);
+                ZIndex = 6;
+                Parent = Header;
+            })
+
+            Library:Create("UICorner", { CornerRadius = UDim.new(0, 2); Parent = HeaderMark; })
+
+            Library:AddToRegistry(HeaderMark, {
                 BackgroundColor3 = "AccentColor";
             })
 
-            -- local GroupboxLabel = 
-            Library:CreateLabel({
-                Size = UDim2.new(1, 0, 0, 18);
-                Position = UDim2.new(0, 4, 0, 2);
+            local GroupboxLabel = Library:CreateLabel({
+                Position = UDim2.new(0, 15, 0, 0);
+                Size = UDim2.new(1, -19, 1, 0);
                 TextSize = 14;
                 Text = Info.Name;
                 TextXAlignment = Enum.TextXAlignment.Left;
-                ZIndex = 5;
-                Parent = BoxInner;
+                TextTruncate = Enum.TextTruncate.AtEnd;
+                ZIndex = 7;
+                Parent = Header;
             })
 
             local Container = Library:Create("Frame", {
                 BackgroundTransparency = 1;
-                Position = UDim2.new(0, 4, 0, 20);
-                Size = UDim2.new(1, -4, 1, -20);
+                Position = UDim2.new(0, 6, 0, GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING);
+                Size = UDim2.new(1, -12, 1, -(GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING));
                 ZIndex = 1;
                 Parent = BoxInner;
             })
@@ -8826,6 +9052,9 @@ end
                 Parent = Container;
             })
 
+            Groupbox.Header = Header
+            Groupbox.Label = GroupboxLabel
+
             function Groupbox:Resize()
                 local Size = 0
 
@@ -8835,7 +9064,7 @@ end
                     end
                 end
 
-                BoxOuter.Size = UDim2.new(1, 0, 0, (20 * DPIScale + Size) + 2 + 2)
+                BoxOuter.Size = UDim2.new(1, 0, 0, ((GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING) * DPIScale + Size) + (GROUPBOX_PADDING * DPIScale))
             end
 
             Groupbox.Container = Container
@@ -8866,8 +9095,7 @@ end
 
             local BoxOuter = Library:Create("Frame", {
                 BackgroundColor3 = Library.BackgroundColor;
-                BorderColor3 = Library.OutlineColor;
-                BorderMode = Enum.BorderMode.Inset;
+                BorderSizePixel = 0;
                 Size = UDim2.new(1, 0, 0, 0);
                 ZIndex = 2;
                 Parent = Info.Side == 1 and LeftSide or RightSide;
@@ -8875,41 +9103,83 @@ end
 
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = "BackgroundColor";
-                BorderColor3 = "OutlineColor";
+            })
+
+            Library:Create("UICorner", {
+                CornerRadius = Library.CornerRadius;
+                Parent = BoxOuter;
+            })
+
+            local BoxStroke = Library:Create("UIStroke", {
+                Color = Library.OutlineColor;
+                Thickness = 1;
+                Parent = BoxOuter;
+            })
+
+            Library:AddToRegistry(BoxStroke, {
+                Color = "OutlineColor";
             })
 
             local BoxInner = Library:Create("Frame", {
-                BackgroundColor3 = Library.BackgroundColor;
-                BorderColor3 = Color3.new(0, 0, 0);
-                -- BorderMode = Enum.BorderMode.Inset;
-                Size = UDim2.new(1, -2, 1, -2);
-                Position = UDim2.new(0, 1, 0, 1);
+                BackgroundTransparency = 1;
+                BorderSizePixel = 0;
+                Size = UDim2.new(1, 0, 1, 0);
                 ZIndex = 4;
                 Parent = BoxOuter;
             })
 
-            Library:AddToRegistry(BoxInner, {
-                BackgroundColor3 = "BackgroundColor";
-            })
-
-            local Highlight = Library:Create("Frame", {
-                BackgroundColor3 = Library.AccentColor;
+            --// Header \--
+            -- The tab buttons live in the same shaded strip a groupbox title uses.
+            local Header = Library:Create("Frame", {
+                BackgroundColor3 = Library.MainColor;
                 BorderSizePixel = 0;
-                Size = UDim2.new(1, 0, 0, 2);
-                ZIndex = 10;
+                Size = UDim2.new(1, 0, 0, GROUPBOX_HEADER_HEIGHT);
+                ZIndex = 5;
                 Parent = BoxInner;
             })
 
-            Library:AddToRegistry(Highlight, {
-                BackgroundColor3 = "AccentColor";
+            Library:AddToRegistry(Header, {
+                BackgroundColor3 = "MainColor";
+            })
+
+            Library:Create("UICorner", {
+                CornerRadius = Library.CornerRadius;
+                Parent = Header;
+            })
+
+            local HeaderFill = Library:Create("Frame", {
+                AnchorPoint = Vector2.new(0, 1);
+                BackgroundColor3 = Library.MainColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 1, 0);
+                Size = UDim2.new(1, 0, 0, 6);
+                ZIndex = 5;
+                Parent = Header;
+            })
+
+            Library:AddToRegistry(HeaderFill, {
+                BackgroundColor3 = "MainColor";
+            })
+
+            local HeaderDivider = Library:Create("Frame", {
+                AnchorPoint = Vector2.new(0, 1);
+                BackgroundColor3 = Library.OutlineColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 1, 0);
+                Size = UDim2.new(1, 0, 0, 1);
+                ZIndex = 8;
+                Parent = Header;
+            })
+
+            Library:AddToRegistry(HeaderDivider, {
+                BackgroundColor3 = "OutlineColor";
             })
 
             local TabboxButtons = Library:Create("Frame", {
                 BackgroundTransparency = 1;
-                Position = UDim2.new(0, 0, 0, 1);
-                Size = UDim2.new(1, 0, 0, 18);
+                Size = UDim2.new(1, 0, 1, 0);
                 ZIndex = 5;
-                Parent = BoxInner;
+                Parent = Header;
             })
 
             Library:Create("UIListLayout", {
@@ -8968,8 +9238,8 @@ end
 
                 local Container = Library:Create("Frame", {
                     BackgroundTransparency = 1;
-                    Position = UDim2.new(0, 4, 0, 20);
-                    Size = UDim2.new(1, -4, 1, -20);
+                    Position = UDim2.new(0, 6, 0, GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING);
+                    Size = UDim2.new(1, -12, 1, -(GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING));
                     ZIndex = 1;
                     Visible = false;
                     Parent = BoxInner;
@@ -9028,7 +9298,7 @@ end
                         end
                     end
 
-                    BoxOuter.Size = UDim2.new(1, 0, 0, (20 * DPIScale + Size) + 2 + 2)
+                    BoxOuter.Size = UDim2.new(1, 0, 0, ((GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING) * DPIScale + Size) + (GROUPBOX_PADDING * DPIScale))
                 end
 
                 Button.InputBegan:Connect(function(Input)
@@ -9079,6 +9349,9 @@ end
         end)
 
         -- Shape this tab's button for the window's current menu layout.
+        if Icon ~= nil and Icon ~= "" then
+            Tab:SetIcon(Icon)
+        end
         ApplyTabLayout(Window.MenuLayout, false)
 
         -- This was the first tab added, so we show it by default.
