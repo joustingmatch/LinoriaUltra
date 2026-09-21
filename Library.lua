@@ -7602,8 +7602,8 @@ function Library:CreateWindow(...)
         AnchorPoint = Vector2.new(0, 0.5);
         BackgroundTransparency = 1;
         BorderSizePixel = 0;
-        Position = UDim2.new(0, 2, 0.5, 1);
-        Size = UDim2.fromOffset(24, 24);
+        Position = UDim2.new(0, 10, 0.5, 1);
+        Size = UDim2.fromOffset(20, 20);
         Image = "";
         ImageColor3 = Library.AccentColor;
         ImageTransparency = 1;
@@ -7616,8 +7616,8 @@ function Library:CreateWindow(...)
     TrackSidebar(FooterLogo, "ImageTransparency", 0)
 
     local FooterTitle = Library:CreateLabel({
-        Position = UDim2.new(0, 2, 0, 12);
-        Size = UDim2.new(1, -4, 0, 16);
+        Position = UDim2.new(0, 12, 0, 12);
+        Size = UDim2.new(1, -16, 0, 16);
         Text = "";
         TextSize = 14;
         TextColor3 = Library.AccentColor;
@@ -7633,8 +7633,8 @@ function Library:CreateWindow(...)
     TrackSidebar(FooterTitle, "TextTransparency", 0)
 
     local FooterSubtitle = Library:CreateLabel({
-        Position = UDim2.new(0, 2, 0, 28);
-        Size = UDim2.new(1, -4, 0, 14);
+        Position = UDim2.new(0, 12, 0, 28);
+        Size = UDim2.new(1, -16, 0, 14);
         Text = "";
         TextSize = 12;
         TextTruncate = Enum.TextTruncate.AtEnd;
@@ -7677,8 +7677,9 @@ function Library:CreateWindow(...)
     local function LayoutFooter()
         local HasIcon = FooterLogo.Image ~= ""
         local HasSubtitle = FooterSubtitle.Text ~= ""
-        local TextX = HasIcon and 32 or 2
-        local Width = UDim2.new(1, -(TextX + 2), 0, 0)
+        -- Text lines up with the tab labels above (12px, or past the icon).
+        local TextX = HasIcon and 36 or 12
+        local Width = UDim2.new(1, -(TextX + 4), 0, 0)
 
         FooterLogo.Visible = HasIcon
         FooterSubtitle.Visible = HasSubtitle

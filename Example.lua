@@ -742,7 +742,7 @@ ThemeManager:ApplyToTab(Tabs["UI Settings"])
 Window:SetFooter({
 	Title = "Zeke Hub",
 	Subtitle = "[UP] Just a Skid",
-	Icon = "rbxassetid://0", -- asset id / url / lucide icon name
+	-- Icon = "user", -- lucide icon name, asset id or url (omit for text only)
 	-- IconColor = Color3.fromRGB(0, 170, 255),
 	-- TitleColor = Color3.fromRGB(255, 255, 255), -- `false` puts it back on the accent
 	-- SubtitleColor = false,                      -- `false` puts it back on the font colour
