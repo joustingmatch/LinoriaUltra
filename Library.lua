@@ -9312,7 +9312,67 @@ end
                 Parent = TabboxButtons;
             })
 
-            function Tabbox:AddTab(Name)
+            -- One accent bar shared by every tab, slid to whichever is active.
+            local Indicator = Library:Create("Frame", {
+                AnchorPoint = Vector2.new(0, 1);
+                BackgroundColor3 = Library.AccentColor;
+                BorderSizePixel = 0;
+                Position = UDim2.new(0, 0, 1, 0);
+                Size = UDim2.new(0, 0, 0, 2);
+                ZIndex = 9;
+                Parent = Header;
+            })
+            Library:AddToRegistry(Indicator, { BackgroundColor3 = "AccentColor"; })
+            Library:Create("UICorner", { CornerRadius = UDim.new(0, 1); Parent = Indicator; })
+
+            local TabboxTween = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+            Tabbox.Order = {}
+
+            -- Slides the accent bar under the active tab and re-dims the labels.
+            local function UpdateIndicator(Animate)
+                local Count = #Tabbox.Order
+                if Count == 0 then return end
+
+                local ActiveIndex
+                for Index, Entry in next, Tabbox.Order do
+                    local IsActive = Entry.Tab.Container.Visible
+                    if IsActive then ActiveIndex = Index end
+
+                    TweenService:Create(Entry.Label, TabboxTween, {
+                        TextTransparency = IsActive and 0 or 0.45;
+                    }):Play()
+
+                    if Entry.Icon then
+                        Library.RegistryMap[Entry.Icon].Properties.ImageColor3 = IsActive and "AccentColor" or "FontColor"
+                        TweenService:Create(Entry.Icon, TabboxTween, {
+                            ImageTransparency = IsActive and 0 or 0.45;
+                            ImageColor3 = IsActive and Library.AccentColor or Library.FontColor;
+                        }):Play()
+                    end
+                end
+
+                if not ActiveIndex then return end
+
+                local Goal = {
+                    Position = UDim2.new((ActiveIndex - 1) / Count, 6, 1, 0);
+                    Size = UDim2.new(1 / Count, -12, 0, 2);
+                }
+
+                if Animate then
+                    TweenService:Create(Indicator, TabboxTween, Goal):Play()
+                else
+                    Indicator.Position = Goal.Position
+                    Indicator.Size = Goal.Size
+                end
+            end
+
+            -- Tabbox:AddTab("Name") or Tabbox:AddTab("Name", "icon")
+            function Tabbox:AddTab(Name, Icon)
+                if typeof(Name) == "table" then
+                    Icon = Name.Icon or Name.Image
+                    Name = Name.Name or Name.Title or ""
+                end
+
                 local Tab = {
                     Elements = {};
                     Container = nil;
@@ -9322,44 +9382,58 @@ end
                     Name = Name;
                 }
 
+                -- Flat segment: no plate, no border. The shared accent bar and
+                -- the label dimming carry the selected state.
                 local Button = Library:Create("Frame", {
-                    BackgroundColor3 = Library.MainColor;
-                    BorderColor3 = Color3.new(0, 0, 0);
+                    BackgroundColor3 = Library.AccentColor;
+                    BackgroundTransparency = 1;
+                    BorderSizePixel = 0;
                     Size = UDim2.new(0.5, 0, 1, 0);
                     ZIndex = 6;
                     Parent = TabboxButtons;
                 })
 
                 Library:AddToRegistry(Button, {
-                    BackgroundColor3 = "MainColor";
+                    BackgroundColor3 = "AccentColor";
                 })
 
-                -- local ButtonLabel = 
-                Library:CreateLabel({
-                    Size = UDim2.new(1, 0, 1, 0);
+                local ButtonIcon
+                if Icon ~= nil and Icon ~= false and Icon ~= "" then
+                    local Resolved = Library:GetCustomIcon(tostring(Icon))
+                    if Resolved then
+                        ButtonIcon = Library:Create("ImageLabel", {
+                            AnchorPoint = Vector2.new(1, 0.5);
+                            BackgroundTransparency = 1;
+                            BorderSizePixel = 0;
+                            Position = UDim2.new(0.5, -4, 0.5, 0);
+                            Size = UDim2.fromOffset(13, 13);
+                            Image = Resolved.Url;
+                            ImageRectOffset = Resolved.ImageRectOffset;
+                            ImageRectSize = Resolved.ImageRectSize;
+                            ImageColor3 = Library.FontColor;
+                            ImageTransparency = 0.45;
+                            ScaleType = Enum.ScaleType.Fit;
+                            ZIndex = 7;
+                            Parent = Button;
+                        })
+                        Library:AddToRegistry(ButtonIcon, { ImageColor3 = "FontColor"; })
+                    end
+                end
+
+                local ButtonLabel = Library:CreateLabel({
+                    Position = UDim2.new(0, ButtonIcon and 9 or 0, 0, 0);
+                    Size = UDim2.new(1, ButtonIcon and -9 or 0, 1, 0);
                     TextSize = 14;
                     Text = Name;
                     TextXAlignment = Enum.TextXAlignment.Center;
+                    TextTransparency = 0.45;
+                    TextTruncate = Enum.TextTruncate.AtEnd;
                     ZIndex = 7;
                     Parent = Button;
                     RichText = true;
                 })
 
-                local Block = Library:Create("Frame", {
-                    BackgroundColor3 = Library.BackgroundColor;
-                    BorderSizePixel = 0;
-                    Position = UDim2.new(0, 0, 1, 0);
-                    Size = UDim2.new(1, 0, 0, 1);
-                    Visible = false;
-                    ZIndex = 9;
-                    Parent = Button;
-                })
-
-                Library:AddToRegistry(Block, {
-                    BackgroundColor3 = "BackgroundColor";
-                })
-
-                local Container = Library:Create("Frame", {
+                local Container = Library:Create(SupportsCanvasGroup and "CanvasGroup" or "Frame", {
                     BackgroundTransparency = 1;
                     Position = UDim2.new(0, 6, 0, GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING);
                     Size = UDim2.new(1, -12, 1, -(GROUPBOX_HEADER_HEIGHT + GROUPBOX_PADDING));
@@ -9374,26 +9448,43 @@ end
                     Parent = Container;
                 })
 
-                function Tab:Show()
-                    for _, Tab in next, Tabbox.Tabs do
-                        Tab:Hide()
+                -- Resting position, restored after each reveal animation.
+                local ContainerPosition = Container.Position
+
+                function Tab:Show(Animate)
+                    for _, Other in next, Tabbox.Tabs do
+                        if Other ~= Tab then Other:Hide() end
                     end
 
                     Container.Visible = true
-                    Block.Visible = true
-
-                    Button.BackgroundColor3 = Library.BackgroundColor
-                    Library.RegistryMap[Button].Properties.BackgroundColor3 = "BackgroundColor"
-
                     Tab:Resize()
+
+                    -- The page it reveals lifts into place and fades in, the same
+                    -- way a window tab does.
+                    if Animate ~= false then
+                        Container.Position = ContainerPosition + UDim2.fromOffset(0, 6)
+                        if SupportsCanvasGroup then
+                            Container.GroupTransparency = 1
+                            TweenService:Create(Container, TabboxTween, {
+                                Position = ContainerPosition;
+                                GroupTransparency = 0;
+                            }):Play()
+                        else
+                            TweenService:Create(Container, TabboxTween, {
+                                Position = ContainerPosition;
+                            }):Play()
+                        end
+                    else
+                        Container.Position = ContainerPosition
+                        if SupportsCanvasGroup then Container.GroupTransparency = 0 end
+                    end
+
+                    UpdateIndicator(Animate ~= false)
                 end
 
                 function Tab:Hide()
                     Container.Visible = false
-                    Block.Visible = false
-
-                    Button.BackgroundColor3 = Library.MainColor
-                    Library.RegistryMap[Button].Properties.BackgroundColor3 = "MainColor"
+                    TweenService:Create(Button, TabboxTween, { BackgroundTransparency = 1 }):Play()
                 end
 
                 function Tab:Resize()
@@ -9431,6 +9522,22 @@ end
                     end
                 end)
 
+                -- Inactive segments lighten under the cursor.
+                Button.MouseEnter:Connect(function()
+                    if not Container.Visible then
+                        TweenService:Create(Button, TabboxTween, { BackgroundTransparency = 0.9 }):Play()
+                        TweenService:Create(ButtonLabel, TabboxTween, { TextTransparency = 0.15 }):Play()
+                    end
+                end)
+                Button.MouseLeave:Connect(function()
+                    TweenService:Create(Button, TabboxTween, { BackgroundTransparency = 1 }):Play()
+                    if not Container.Visible then
+                        TweenService:Create(ButtonLabel, TabboxTween, { TextTransparency = 0.45 }):Play()
+                    end
+                end)
+
+                table.insert(Tabbox.Order, { Tab = Tab, Label = ButtonLabel, Icon = ButtonIcon })
+
                 Tab.Container = Container
                 Tab.TabboxShow = Tab.Show
                 Tabbox.Tabs[Name] = Tab
@@ -9442,8 +9549,11 @@ end
 
                 -- Show first tab (number is 2 cus of the UIListLayout that also sits in that instance)
                 if #TabboxButtons:GetChildren() == 2 then
-                    Tab:Show()
+                    Tab:Show(false)
                 end
+
+                -- Segments split the header evenly, so every addition moves the bar.
+                UpdateIndicator(false)
 
                 return Tab
             end

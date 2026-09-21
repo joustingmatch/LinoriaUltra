@@ -84,6 +84,7 @@ local LeftGroupBox = Tabs.Main:AddLeftGroupbox("Groupbox")
 
 local TabBox = Tabs.Main:AddLeftTabbox() -- Add Tabbox on left side
 
+-- Tabbox tabs take an optional icon too: TabBox:AddTab("Tab 1", "crosshair")
 local Tab1 = TabBox:AddTab("Tab 1")
 local Tab2 = TabBox:AddTab("Tab 2")
 
